@@ -81,7 +81,7 @@
   </div>
 
   <!-- MSAL para autenticacion con Microsoft Entra ID -->
-  <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.10.0/lib/msal-browser.min.js"></script>
 
   <!-- Bot Framework WebChat -->
   <script src="https://cdn.botframework.com/botframework-webchat/latest/webchat.js"></script>
@@ -107,7 +107,7 @@
     // =====================================================
 
     // Instancia de MSAL
-    const msalInstance = new msal.PublicClientApplication({
+    const msalInstance = new msalBrowser.PublicClientApplication({
       auth: {
         clientId: CONFIG.clientId,
         authority: `https://login.microsoftonline.com/${CONFIG.tenantId}`,
