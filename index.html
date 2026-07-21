@@ -81,12 +81,15 @@
   </div>
 
   <!-- MSAL para autenticacion con Microsoft Entra ID -->
-  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.10.0/lib/msal-browser.min.js"></script>
+  <script type="module">
+  import * as msalBrowser from 'https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.10.0/dist/index.esm.min.js';
+  window.msalBrowser = msalBrowser;
+  </script>
 
   <!-- Bot Framework WebChat -->
   <script src="https://cdn.botframework.com/botframework-webchat/latest/webchat.js"></script>
 
-  <script>
+  <script defer>
     // =====================================================
     // CONFIGURACION — RELLENA ESTOS VALORES
     // =====================================================
