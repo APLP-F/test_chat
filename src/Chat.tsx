@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { PublicClientApplication } from "@azure/msal-browser";
+import { PublicClientApplication, AccountInfo } from "@azure/msal-browser";
 import { Components } from "botframework-webchat";
 import {
   CopilotStudioClient,
@@ -17,57 +17,97 @@ const msalInstance = new PublicClientApplication(msalConfig);
 function Chat() {
   const [connection, setConnection] = useState<any>(null);
   const [usuario, setUsuario] = useState("");
-  const [mensaje, setMensaje] = useState("Conectando con Puerto Emplea...");
+  const [mensaje, setMensaje] = useState("Preparando Puerto Emplea...");
+  const [necesitaLogin, setNecesitaLogin] = useState(false);
+  const [cargando, setCargando] = useState(false);
+
+  const conectarConCuenta = async (cuenta: AccountInfo) => {
+    setCargando(true);
+
+    try {
+      setUsuario(cuenta.username);
+      setMensaje("Obteniendo permisos para Copilot Studio...");
+
+      let tokenResult;
+
+      try {
+        tokenResult = await msalInstance.acquireTokenSilent({
+          ...copilotLoginRequest,
+          account: cuenta,
+        });
+      } catch {
+        tokenResult = await msalInstance.acquireTokenPopup({
+          ...copilotLoginRequest,
+          account: cuenta,
+        });
+      }
+
+      setMensaje("Conectando con Puerto Emplea...");
+
+      const client = new CopilotStudioClient(
+        settings,
+        tokenResult.accessToken
+      );
+
+      const nuevaConexion =
+        CopilotStudioWebChat.createConnection(client, {
+          showTyping: true,
+        });
+
+      setConnection(nuevaConexion);
+      setNecesitaLogin(false);
+    } catch (error) {
+      console.error("Error conectando con el chat:", error);
+      setMensaje("Error cargando el chat");
+      setNecesitaLogin(true);
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const iniciarSesion = async () => {
+    setCargando(true);
+
+    try {
+      await msalInstance.initialize();
+
+      const loginResult = await msalInstance.loginPopup({
+        ...copilotLoginRequest,
+      });
+
+      if (loginResult.account) {
+        await conectarConCuenta(loginResult.account);
+      } else {
+        setMensaje("No se pudo obtener la cuenta del usuario.");
+        setNecesitaLogin(true);
+      }
+    } catch (error) {
+      console.error("Error iniciando sesión:", error);
+      setMensaje("No se pudo iniciar sesión.");
+      setNecesitaLogin(true);
+    } finally {
+      setCargando(false);
+    }
+  };
 
   useEffect(() => {
     const cargarChat = async () => {
       try {
         await msalInstance.initialize();
-        await msalInstance.handleRedirectPromise();
 
         const cuentas = msalInstance.getAllAccounts();
 
         if (cuentas.length === 0) {
-          await msalInstance.loginRedirect({
-            ...copilotLoginRequest,
-          });
+          setMensaje("Inicia sesión para usar Puerto Emplea.");
+          setNecesitaLogin(true);
           return;
         }
 
-        const cuenta = cuentas[0];
-
-        setUsuario(cuenta.username);
-
-        let tokenResult;
-
-        try {
-          tokenResult = await msalInstance.acquireTokenSilent({
-            ...copilotLoginRequest,
-            account: cuenta,
-          });
-        } catch {
-          await msalInstance.acquireTokenRedirect({
-            ...copilotLoginRequest,
-            account: cuenta,
-          });
-
-          return;
-        }
-
-        const client = new CopilotStudioClient(
-          settings,
-          tokenResult.accessToken
-        );
-
-        const nuevaConexion =
-          CopilotStudioWebChat.createConnection(client, {
-            showTyping: true,
-          });
-
-        setConnection(nuevaConexion);
+        await conectarConCuenta(cuentas[0]);
       } catch (error) {
-        console.error(error);
-        setMensaje("Error cargando el chat");
+        console.error("Error inicializando MSAL:", error);
+        setMensaje("Inicia sesión para usar Puerto Emplea.");
+        setNecesitaLogin(true);
       }
     };
 
@@ -86,7 +126,35 @@ function Chat() {
       <div className="loading">
         <div className="loading-card">
           <h1>Puerto Emplea</h1>
+
           <p>{mensaje}</p>
+
+          {usuario && (
+            <p>
+              Usuario conectado: <strong>{usuario}</strong>
+            </p>
+          )}
+
+          {necesitaLogin && (
+            <button
+              onClick={iniciarSesion}
+              disabled={cargando}
+              style={{
+                marginTop: "20px",
+                padding: "12px 22px",
+                borderRadius: "10px",
+                border: "none",
+                background: "#0d3b66",
+                color: "#ffffff",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              {cargando
+                ? "Conectando..."
+                : "Iniciar sesión con Microsoft"}
+            </button>
+          )}
         </div>
       </div>
     );
@@ -101,7 +169,7 @@ function Chat() {
             alt="Puerto Emplea"
             className="logo"
           />
-          
+
           <div className="brand-subtitle">
             Asistente IA
           </div>
