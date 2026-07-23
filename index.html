@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Puerto Emplea Chat</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      overflow: hidden;
+    }
+    #auth-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 20px;
+      color: #333;
+    }
+    #auth-screen p { font-size: 15px; color: #666; }
+    #login-btn {
+      display: none;
+      padding: 12px 28px;
+      background: #0078d4;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 500;
+    }
+    #login-btn:hover { background: #106ebe; }
+    #error-msg {
+      display: none;
+      color: #d32f2f;
+      font-size: 14px;
+      text-align: center;
+      max-width: 360px;
+    }
+    #webchat-container {
+      display: none;
+      flex: 1;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #webchat { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+
+  <div id="auth-screen">
+    <p id="auth-msg">Iniciando sesión...</p>
+    <button id="login-btn">Iniciar sesión con Microsoft</button>
+    <p id="error-msg"></p>
+  </div>
+
+  <div id="webchat-container">
+    <div id="webchat"></div>
+  </div>
+
+  <!-- Bot Framework WebChat (NO es modulo, va primero) -->
+  <script src="https://cdn.botframework.com/botframework-webchat/latest/webchat.js"></script>
+
+  <!-- Todo en un solo modulo para que MSAL y el chat carguen en orden -->
+  <script type="module">
+    import { PublicClientApplication } from 'https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.10.0/+esm';
+
+    // =====================================================
+    // CONFIGURACION
+    // =====================================================
+    const CONFIG = {
+      clientId: '5cdf706c-6675-4351-8f5a-1e7e125d7dc3',
+      tenantId: '6b8fc458-4a99-e825-afb8-ecbd16a97c53',
+      tokenEndpoint: 'https://6b8fc4584a99e825afb8ecbd16a97c.53.environment.api.powerplatform.com/copilotstudio/dataverse-backed/authenticated/bots/cr1f8_PuertoEmplea/directline/token?api-version=2022-03-01-preview',
+      scopes: ['https://api.powerplatform.com/CopilotStudio.Copilots.Invoke']
+    };
+    // =====================================================
+
+    const msalInstance = new PublicClientApplication({
+      auth: {
+        clientId: CONFIG.clientId,
+        authority: `https://login.microsoftonline.com/${CONFIG.tenantId}`,
+        redirectUri: window.location.href.split('?')[0].split('#')[0]
+      },
+      cache: {
+        cacheLocation: 'localStorage',
+        storeAuthStateInCookie: true
+      }
+    });
+
+    function showError(msg) {
+      document.getElementById('auth-msg').textContent = 'No se pudo iniciar sesión.';
+      const errEl = document.getElementById('error-msg');
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+    }
+
+    document.getElementById('login-btn').addEventListener('click', async () => {
+      try {
+        await msalInstance.loginRedirect({ scopes: CONFIG.scopes });
+      } catch (e) {
+        showError('Error al iniciar sesión: ' + e.message);
+      }
+    });
+
+    async function getAccessToken() {
+      await msalInstance.initialize();
+
+      const redirectResult = await msalInstance.handleRedirectPromise();
+      if (redirectResult) return redirectResult.accessToken;
+
+      const accounts = msalInstance.getAllAccounts();
+
+      if (accounts.length > 0) {
+        try {
+          const result = await msalInstance.acquireTokenSilent({
+            scopes: CONFIG.scopes,
+            account: accounts[0]
+          });
+          return result.accessToken;
+        } catch (silentError) {
+          console.warn('Token silencioso falló, redirigiendo...', silentError);
+          await msalInstance.acquireTokenRedirect({ scopes: CONFIG.scopes });
+          return null;
+        }
+      } else {
+        document.getElementById('auth-msg').textContent = 'Inicia sesión para usar el chat.';
+        document.getElementById('login-btn').style.display = 'block';
+        return null;
+      }
+    }
+
+    async function getDirectLineToken(accessToken) {
+      const response = await fetch(CONFIG.tokenEndpoint, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      if (!response.ok) {
+        throw new Error(`Error token DirectLine: ${response.status} ${response.statusText}`);
+      }
+      const data = await response.json();
+      return data.token;
+    }
+
+    async function initChat() {
+      try {
+        const accessToken = await getAccessToken();
+        if (!accessToken) return;
+
+        const directLineToken = await getDirectLineToken(accessToken);
+
+        const store = window.WebChat.createStore(
+          {},
+          () => next => action => {
+            if (action.type === 'DIRECT_LINE/INCOMING_ACTIVITY') {
+              const activity = action.payload.activity;
+              if (activity.from?.role === 'bot' && activity.type === 'message' && activity.text) {
+                window.parent.postMessage({
+                  type: 'BOT_RESPONSE',
+                  text: activity.text,
+                  conversationId: activity.conversation?.id || ''
+                }, '*');
+              }
+            }
+            if (action.type === 'WEB_CHAT/SEND_MESSAGE') {
+              window.parent.postMessage({
+                type: 'USER_MESSAGE',
+                text: action.payload.text
+              }, '*');
+            }
+            return next(action);
+          }
+        );
+
+        document.getElementById('auth-screen').style.display = 'none';
+        document.getElementById('webchat-container').style.display = 'flex';
+
+        window.WebChat.renderWebChat(
+          {
+            directLine: window.WebChat.createDirectLine({ token: directLineToken }),
+            store,
+            locale: 'es-ES',
+            styleOptions: {
+              botAvatarInitials: 'PE',
+              userAvatarInitials: 'Yo',
+              bubbleBackground: '#f0f0f0',
+              bubbleTextColor: '#333',
+              bubbleBorderRadius: 12,
+              bubbleFromUserBackground: '#0078d4',
+              bubbleFromUserTextColor: '#fff',
+              bubbleFromUserBorderRadius: 12,
+              rootHeight: '100%',
+              rootWidth: '100%',
+              backgroundColor: '#fff'
+            }
+          },
+          document.getElementById('webchat')
+        );
+
+      } catch (error) {
+        console.error('Error iniciando chat:', error);
+        showError('Error: ' + error.message);
+      }
+    }
+
+    initChat();
+  </script>
+</body>
+</html>
