@@ -36,6 +36,7 @@ function Chat() {
         }
 
         const cuenta = cuentas[0];
+
         setUsuario(cuenta.username);
 
         let tokenResult;
@@ -59,9 +60,10 @@ function Chat() {
           tokenResult.accessToken
         );
 
-        const nuevaConexion = CopilotStudioWebChat.createConnection(client, {
-          showTyping: true,
-        });
+        const nuevaConexion =
+          CopilotStudioWebChat.createConnection(client, {
+            showTyping: true,
+          });
 
         setConnection(nuevaConexion);
       } catch (error) {
@@ -76,37 +78,7 @@ function Chat() {
   const styleOptions = {
     rootHeight: "100%",
     rootWidth: "100%",
-
     primaryFont: "Inter, Segoe UI, sans-serif",
-
-    botAvatarInitials: "",
-    userAvatarInitials: "",
-
-    bubbleMaxWidth: 920,
-    bubbleMinWidth: 260,
-    bubbleBorderRadius: 10,
-    bubbleBorderColor: "#e5e7eb",
-    bubbleBorderStyle: "solid",
-    bubbleBorderWidth: 1,
-    bubbleBackground: "#ffffff",
-    bubbleTextColor: "#111827",
-    bubbleNubSize: 0,
-
-    bubbleFromUserMaxWidth: 720,
-    bubbleFromUserBorderRadius: 10,
-    bubbleFromUserBorderColor: "#e5e7eb",
-    bubbleFromUserBorderStyle: "solid",
-    bubbleFromUserBorderWidth: 1,
-    bubbleFromUserBackground: "#ffffff",
-    bubbleFromUserTextColor: "#111827",
-    bubbleFromUserNubSize: 0,
-
-    sendBoxHeight: 58,
-    sendBoxBackground: "#ffffff",
-    sendBoxBorderTop: "1px solid #e5e7eb",
-    sendBoxTextColor: "#111827",
-    sendBoxPlaceholderColor: "#777777",
-
     hideUploadButton: false,
   };
 
@@ -126,7 +98,7 @@ function Chat() {
       <aside className="sidebar">
         <div className="brand">
           <img
-            src="/logo.png"
+            src={`${import.meta.env.BASE_URL}logo.png`}
             alt="Puerto Emplea"
             className="logo"
           />
