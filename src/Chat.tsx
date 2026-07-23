@@ -31,7 +31,6 @@ function Chat() {
           await msalInstance.loginRedirect({
             ...copilotLoginRequest,
           });
-
           return;
         }
 
@@ -102,11 +101,7 @@ function Chat() {
             alt="Puerto Emplea"
             className="logo"
           />
-
-          <div className="brand-title">
-            Puerto Emplea
-          </div>
-
+          
           <div className="brand-subtitle">
             Asistente IA
           </div>

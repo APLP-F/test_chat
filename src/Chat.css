@@ -46,8 +46,8 @@ body {
 }
 
 .sidebar {
-  width: 280px;
-  min-width: 280px;
+  width: 300px;
+  min-width: 300px;
   background: #f9f9f9;
   border-right: 1px solid #ececec;
   display: flex;
@@ -56,24 +56,20 @@ body {
 }
 
 .brand {
-  margin-bottom: 20px;
+  margin-bottom: 25px;
+  text-align: center;
 }
 
 .logo {
-  width: 170px;
-  margin-bottom: 12px;
-}
-
-.brand-title {
-  font-size: 22px;
-  font-weight: 700;
-  color: #111827;
+  width: 260px;
+  max-width: 100%;
+  display: block;
+  margin: 0 auto 12px auto;
 }
 
 .brand-subtitle {
-  font-size: 13px;
+  font-size: 14px;
   color: #777777;
-  margin-top: 4px;
 }
 
 .new-chat-btn {
@@ -132,28 +128,4 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-}
-
-/* WEBCHAT */
-
-.chat-wrapper .webchat {
-  width: 100% !important;
-  height: 100% !important;
-}
-
-.chat-wrapper .webchat__basic-transcript {
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-}
-
-.chat-wrapper .webchat__bubble__content {
-  text-align: left !important;
-}
-
-.chat-wrapper .webchat__render-markdown {
-  text-align: left !important;
-}
-
-.chat-wrapper .webchat__render-markdown * {
-  text-align: left !important;
 }
