@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { PublicClientApplication, AccountInfo } from "@azure/msal-browser";
+import { PublicClientApplication } from "@azure/msal-browser";
+import type { AccountInfo } from "@azure/msal-browser";
 import { Components } from "botframework-webchat";
 import {
   CopilotStudioClient,
