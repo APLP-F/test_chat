@@ -18,9 +18,9 @@ export const msalConfig = {
   },
 
   cache: {
-    cacheLocation: "sessionStorage",
-    storeAuthStateInCookie: false,
-  },
+  cacheLocation: "localStorage",
+  storeAuthStateInCookie: true,
+},
 };
 
 export const copilotLoginRequest = {
