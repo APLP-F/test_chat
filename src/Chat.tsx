@@ -21,6 +21,95 @@ const { BasicWebChat, Composer } = Components;
 
 const msalInstance = new PublicClientApplication(msalConfig);
 
+const STORAGE_KEY = "puerto_emplea_chat_conversations_v1";
+
+type ChatRole = "user" | "bot";
+
+interface SavedMessage {
+  id: string;
+  role: ChatRole;
+  text: string;
+  createdAt: string;
+}
+
+interface SavedConversation {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: SavedMessage[];
+}
+
+function createId(): string {
+  if (window.crypto && "randomUUID" in window.crypto) {
+    return window.crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function createEmptyConversation(): SavedConversation {
+  const now = new Date().toISOString();
+
+  return {
+    id: createId(),
+    title: "Conversación actual",
+    createdAt: now,
+    updatedAt: now,
+    messages: [],
+  };
+}
+
+function loadStoredConversations(): SavedConversation[] {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return [...parsed] as SavedConversation[];
+  } catch {
+    return [];
+  }
+}
+
+
+function saveStoredConversations(conversations: SavedConversation[]): void {
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
+}
+
+function getInitialChatData(): {
+  conversations: SavedConversation[];
+  activeConversationId: string;
+} {
+  const stored = loadStoredConversations();
+
+  if (stored.length > 0) {
+    return {
+      conversations: stored,
+      activeConversationId: stored[0].id,
+    };
+  }
+
+  const firstConversation = createEmptyConversation();
+
+  saveStoredConversations([firstConversation]);
+
+  return {
+    conversations: [firstConversation],
+    activeConversationId: firstConversation.id,
+  };
+}
+
+const initialChatData = getInitialChatData();
+
 function Chat() {
   const [connection, setConnection] = useState<any>(null);
   const [usuario, setUsuario] = useState("");
@@ -29,44 +118,115 @@ function Chat() {
   const [cargando, setCargando] = useState(false);
   const [msalListo, setMsalListo] = useState(false);
 
+  const [accessTokenActual, setAccessTokenActual] = useState("");
+  const [conversations, setConversations] = useState<SavedConversation[]>(
+    initialChatData.conversations
+  );
+  const [activeConversationId, setActiveConversationId] = useState(
+    initialChatData.activeConversationId
+  );
+
   const estaEnIframe = window.self !== window.top;
 
-  const store = useMemo(
-    () =>
-      createStore({}, () => (next: any) => (action: any) => {
-        if (action.type === "DIRECT_LINE/INCOMING_ACTIVITY") {
-          const activity = action.payload?.activity;
+  function appendMessageToConversation(
+    conversationId: string,
+    role: ChatRole,
+    text: string
+  ): void {
+    const cleanText = text?.trim();
 
-          if (
-            activity?.from?.role === "bot" &&
-            activity?.type === "message" &&
-            activity?.text
-          ) {
-            window.parent.postMessage(
-              {
-                type: "BOT_RESPONSE",
-                text: activity.text,
-                conversationId: activity.conversation?.id || "",
-              },
-              "*"
-            );
-          }
+    if (!cleanText) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+
+    const newMessage: SavedMessage = {
+      id: createId(),
+      role,
+      text: cleanText,
+      createdAt: now,
+    };
+
+    setConversations((previous) => {
+      const next = previous.map((conversation) => {
+        if (conversation.id !== conversationId) {
+          return conversation;
         }
 
-        if (action.type === "WEB_CHAT/SEND_MESSAGE") {
+        const isFirstUserMessage =
+          role === "user" && conversation.messages.length === 0;
+
+        return {
+          ...conversation,
+          title: isFirstUserMessage
+            ? cleanText.length > 42
+              ? `${cleanText.slice(0, 42)}...`
+              : cleanText
+            : conversation.title,
+          updatedAt: now,
+          messages: [...conversation.messages, newMessage],
+        };
+      });
+
+      saveStoredConversations(next);
+
+      return next;
+    });
+  }
+
+  function createWebChatStore(conversationId: string) {
+    return createStore({}, () => (next: any) => (action: any) => {
+      if (action.type === "DIRECT_LINE/INCOMING_ACTIVITY") {
+        const activity = action.payload?.activity;
+
+        if (
+          activity?.from?.role === "bot" &&
+          activity?.type === "message" &&
+          activity?.text
+        ) {
+          appendMessageToConversation(conversationId, "bot", activity.text);
+
           window.parent.postMessage(
             {
-              type: "USER_MESSAGE",
-              text: action.payload?.text || "",
+              type: "BOT_RESPONSE",
+              text: activity.text,
+              conversationId: activity.conversation?.id || "",
             },
             "*"
           );
         }
+      }
 
-        return next(action);
-      }),
-    []
+      if (action.type === "WEB_CHAT/SEND_MESSAGE") {
+        const userText = action.payload?.text || "";
+
+        appendMessageToConversation(conversationId, "user", userText);
+
+        window.parent.postMessage(
+          {
+            type: "USER_MESSAGE",
+            text: userText,
+          },
+          "*"
+        );
+      }
+
+      return next(action);
+    });
+  }
+
+  const [store, setStore] = useState<any>(() =>
+    createWebChatStore(initialChatData.activeConversationId)
   );
+
+  const activeConversation = useMemo(() => {
+    return (
+      conversations.find(
+        (conversation) => conversation.id === activeConversationId
+      ) || conversations[0]
+    );
+  }, [conversations, activeConversationId]);
 
   const conectarConToken = async (
     username: string,
@@ -76,6 +236,7 @@ function Chat() {
 
     try {
       setUsuario(username);
+      setAccessTokenActual(accessToken);
       setMensaje("Conectando con Puerto Emplea...");
 
       const client = new CopilotStudioClient(settings, accessToken);
@@ -158,6 +319,35 @@ function Chat() {
       setNecesitaLogin(true);
       setCargando(false);
     }
+  };
+
+  const crearNuevaConversacion = async (): Promise<void> => {
+    if (!accessTokenActual || !usuario) {
+      setMensaje("Inicia sesión para crear una nueva conversación.");
+      setNecesitaLogin(true);
+      return;
+    }
+
+    const newConversation = createEmptyConversation();
+
+    setConversations((previous) => {
+      const next = [newConversation, ...previous];
+
+      saveStoredConversations(next);
+
+      return next;
+    });
+
+    setActiveConversationId(newConversation.id);
+    setStore(createWebChatStore(newConversation.id));
+    setConnection(null);
+    setMensaje("Creando nueva conversación...");
+
+    await conectarConToken(usuario, accessTokenActual);
+  };
+
+  const seleccionarConversacion = (conversationId: string): void => {
+    setActiveConversationId(conversationId);
   };
 
   useEffect(() => {
@@ -319,11 +509,28 @@ function Chat() {
           <div className="brand-subtitle">Asistente IA</div>
         </div>
 
-        <button className="new-chat-btn">+ Nueva conversación</button>
+        <button className="new-chat-btn" onClick={crearNuevaConversacion}>
+          + Nueva conversación
+        </button>
 
         <div className="history-title">Conversaciones</div>
 
-        <div className="history-item active">Conversación actual</div>
+        <div className="conversation-list">
+          {conversations.map((conversation) => (
+            <button
+              key={conversation.id}
+              className={
+                conversation.id === activeConversation?.id
+                  ? "history-item active"
+                  : "history-item"
+              }
+              onClick={() => seleccionarConversacion(conversation.id)}
+              title={conversation.title}
+            >
+              {conversation.title}
+            </button>
+          ))}
+        </div>
 
         <div className="user-info">{usuario}</div>
       </aside>
