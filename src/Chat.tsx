@@ -80,7 +80,6 @@ function loadStoredConversations(): SavedConversation[] {
   }
 }
 
-
 function saveStoredConversations(conversations: SavedConversation[]): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
 }
@@ -119,12 +118,16 @@ function Chat() {
   const [msalListo, setMsalListo] = useState(false);
 
   const [accessTokenActual, setAccessTokenActual] = useState("");
+
   const [conversations, setConversations] = useState<SavedConversation[]>(
     initialChatData.conversations
   );
+
   const [activeConversationId, setActiveConversationId] = useState(
     initialChatData.activeConversationId
   );
+
+  const [webChatKey, setWebChatKey] = useState(createId());
 
   const estaEnIframe = window.self !== window.top;
 
@@ -339,11 +342,32 @@ function Chat() {
     });
 
     setActiveConversationId(newConversation.id);
-    setStore(createWebChatStore(newConversation.id));
+
+    const newStore = createWebChatStore(newConversation.id);
+
+    setStore(newStore);
+    setWebChatKey(createId());
     setConnection(null);
     setMensaje("Creando nueva conversación...");
 
-    await conectarConToken(usuario, accessTokenActual);
+    try {
+      const client = new CopilotStudioClient(settings, accessTokenActual);
+
+      const nuevaConexion = await CopilotStudioWebChat.createConnection(
+        client,
+        {
+          showTyping: true,
+        }
+      );
+
+      setConnection(nuevaConexion);
+      setNecesitaLogin(false);
+      setMensaje("");
+    } catch (error) {
+      console.error("Error creando nueva conversación:", error);
+      setMensaje("No se pudo crear una nueva conversación.");
+      setNecesitaLogin(false);
+    }
   };
 
   const seleccionarConversacion = (conversationId: string): void => {
@@ -538,6 +562,7 @@ function Chat() {
       <main className="chat-area">
         <div className="chat-wrapper">
           <Composer
+            key={webChatKey}
             directLine={connection}
             store={store}
             styleOptions={styleOptions}
