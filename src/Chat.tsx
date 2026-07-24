@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PublicClientApplication } from "@azure/msal-browser";
 import type { AccountInfo } from "@azure/msal-browser";
 import { Components, createStore } from "botframework-webchat";
@@ -31,152 +31,209 @@ function Chat() {
 
   const estaEnIframe = window.self !== window.top;
 
-  // Store que intercepta mensajes y los envía al PCF via postMessage
-  const store = useMemo(() => createStore(
-    {},
-    () => (next: any) => (action: any) => {
-      // Respuesta del agente
-      if (action.type === 'DIRECT_LINE/INCOMING_ACTIVITY') {
-        const activity = action.payload?.activity;
-        if (
-          activity?.from?.role === 'bot' &&
-          activity?.type === 'message' &&
-          activity?.text
-        ) {
-          window.parent.postMessage({
-            type: 'BOT_RESPONSE',
-            text: activity.text,
-            conversationId: activity.conversation?.id || ''
-          }, '*');
+  const store = useMemo(
+    () =>
+      createStore({}, () => (next: any) => (action: any) => {
+        if (action.type === "DIRECT_LINE/INCOMING_ACTIVITY") {
+          const activity = action.payload?.activity;
+
+          if (
+            activity?.from?.role === "bot" &&
+            activity?.type === "message" &&
+            activity?.text
+          ) {
+            window.parent.postMessage(
+              {
+                type: "BOT_RESPONSE",
+                text: activity.text,
+                conversationId: activity.conversation?.id || "",
+              },
+              "*"
+            );
+          }
         }
-      }
 
-      // Mensaje del usuario
-      if (action.type === 'WEB_CHAT/SEND_MESSAGE') {
-        window.parent.postMessage({
-          type: 'USER_MESSAGE',
-          text: action.payload?.text || ''
-        }, '*');
-      }
+        if (action.type === "WEB_CHAT/SEND_MESSAGE") {
+          window.parent.postMessage(
+            {
+              type: "USER_MESSAGE",
+              text: action.payload?.text || "",
+            },
+            "*"
+          );
+        }
 
-      return next(action);
-    }
-  ), []);
+        return next(action);
+      }),
+    []
+  );
 
-  const conectarConCuenta = async (cuenta: AccountInfo) => {
+  const conectarConToken = async (
+    username: string,
+    accessToken: string
+  ): Promise<void> => {
     setCargando(true);
 
     try {
-      setUsuario(cuenta.username);
-      setMensaje("Obteniendo permisos para Copilot Studio...");
-
-      let tokenResult;
-
-      try {
-        tokenResult = await msalInstance.acquireTokenSilent({
-          ...copilotLoginRequest,
-          account: cuenta,
-        });
-      } catch {
-        if (estaEnIframe) {
-          tokenResult = await msalInstance.acquireTokenPopup({
-            ...copilotLoginRequest,
-            account: cuenta,
-            redirectUri: popupRedirectUri,
-          });
-        } else {
-          await msalInstance.acquireTokenRedirect({
-            ...copilotLoginRequest,
-            account: cuenta,
-            redirectUri: appRedirectUri,
-          });
-          return;
-        }
-      }
-
+      setUsuario(username);
       setMensaje("Conectando con Puerto Emplea...");
 
-      const client = new CopilotStudioClient(
-        settings,
-        tokenResult.accessToken
-      );
+      const client = new CopilotStudioClient(settings, accessToken);
 
-      const nuevaConexion = CopilotStudioWebChat.createConnection(client, {
-        showTyping: true,
-      });
+      const nuevaConexion = await CopilotStudioWebChat.createConnection(
+        client,
+        {
+          showTyping: true,
+        }
+      );
 
       setConnection(nuevaConexion);
       setNecesitaLogin(false);
     } catch (error) {
-      console.error("Error conectando con el chat:", error);
-      setMensaje("No se pudo iniciar sesión.");
+      console.error("Error conectando con Copilot Studio:", error);
+      setMensaje("No se pudo conectar con Puerto Emplea.");
       setNecesitaLogin(true);
     } finally {
       setCargando(false);
     }
   };
 
-  const iniciarSesion = () => {
-    if (!msalListo || cargando) return;
+  const conectarConCuenta = async (cuenta: AccountInfo): Promise<void> => {
+    setCargando(true);
+
+    try {
+      setUsuario(cuenta.username);
+      setMensaje("Obteniendo permisos para Copilot Studio...");
+
+      const tokenResult = await msalInstance.acquireTokenSilent({
+        ...copilotLoginRequest,
+        account: cuenta,
+      });
+
+      await conectarConToken(cuenta.username, tokenResult.accessToken);
+    } catch (error) {
+      console.warn("No se pudo obtener token silenciosamente:", error);
+
+      setMensaje("Inicia sesión para usar Puerto Emplea.");
+      setNecesitaLogin(true);
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const iniciarSesion = async (): Promise<void> => {
+    if (!msalListo || cargando) {
+      return;
+    }
 
     setCargando(true);
     setMensaje("Abriendo inicio de sesión...");
 
-    if (estaEnIframe) {
-      msalInstance
-        .loginPopup({
-          ...copilotLoginRequest,
-          prompt: "select_account",
-          redirectUri: popupRedirectUri,
-        })
-        .then(async (loginResult) => {
-          if (loginResult.account) {
-            await conectarConCuenta(loginResult.account);
-          } else {
-            setMensaje("No se pudo obtener la cuenta del usuario.");
-            setNecesitaLogin(true);
-          }
-        })
-        .catch((error) => {
-          console.error("Error iniciando sesión con popup:", error);
-          setMensaje("No se pudo iniciar sesión.");
+    try {
+      if (estaEnIframe) {
+        const authUrl = `${popupRedirectUri}?login=1`;
+
+        const popup = window.open(
+          authUrl,
+          "PuertoEmpleaAuth",
+          "width=520,height=720,menubar=no,toolbar=no,location=yes,status=no,resizable=yes,scrollbars=yes"
+        );
+
+        if (!popup) {
+          setMensaje("El navegador bloqueó la ventana de inicio de sesión.");
           setNecesitaLogin(true);
-        })
-        .finally(() => {
           setCargando(false);
-        });
+        }
 
-      return;
-    }
+        return;
+      }
 
-    msalInstance
-      .loginRedirect({
+      await msalInstance.loginRedirect({
         ...copilotLoginRequest,
         redirectUri: appRedirectUri,
-      })
-      .catch((error) => {
-        console.error("Error iniciando sesión con redirect:", error);
-        setMensaje("No se pudo iniciar sesión.");
-        setNecesitaLogin(true);
-        setCargando(false);
       });
+    } catch (error) {
+      console.error("Error iniciando sesión:", error);
+      setMensaje("No se pudo iniciar sesión.");
+      setNecesitaLogin(true);
+      setCargando(false);
+    }
   };
 
   useEffect(() => {
-    const cargarChat = async () => {
+    const recibirMensajeAuth = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) {
+        return;
+      }
+
+      const data = event.data;
+
+      if (!data || typeof data !== "object") {
+        return;
+      }
+
+      if (data.type === "PUERTO_EMPLEA_AUTH_SUCCESS") {
+        if (!data.accessToken) {
+          setMensaje("No se recibió token de acceso.");
+          setNecesitaLogin(true);
+          setCargando(false);
+          return;
+        }
+
+        await conectarConToken(
+          data.username || "Usuario autenticado",
+          data.accessToken
+        );
+
+        return;
+      }
+
+      if (data.type === "PUERTO_EMPLEA_AUTH_ERROR") {
+        console.error("Error desde auth.html:", data.error);
+        setMensaje("No se pudo iniciar sesión.");
+        setNecesitaLogin(true);
+        setCargando(false);
+      }
+    };
+
+    window.addEventListener("message", recibirMensajeAuth);
+
+    return () => {
+      window.removeEventListener("message", recibirMensajeAuth);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelado = false;
+
+    const cargarChat = async (): Promise<void> => {
       try {
         await msalInstance.initialize();
 
-        const redirectResult = estaEnIframe
-          ? null
-          : await msalInstance.handleRedirectPromise();
-
-        setMsalListo(true);
-
-        if (redirectResult?.account) {
-          await conectarConCuenta(redirectResult.account);
+        if (cancelado) {
           return;
         }
+
+        if (!estaEnIframe) {
+          const redirectResult = await msalInstance.handleRedirectPromise();
+
+          if (redirectResult?.account && redirectResult.accessToken) {
+            await conectarConToken(
+              redirectResult.account.username,
+              redirectResult.accessToken
+            );
+            setMsalListo(true);
+            return;
+          }
+
+          if (redirectResult?.account) {
+            await conectarConCuenta(redirectResult.account);
+            setMsalListo(true);
+            return;
+          }
+        }
+
+        setMsalListo(true);
 
         const cuentas = msalInstance.getAllAccounts();
 
@@ -189,13 +246,20 @@ function Chat() {
         await conectarConCuenta(cuentas[0]);
       } catch (error) {
         console.error("Error inicializando MSAL:", error);
-        setMensaje("Inicia sesión para usar Puerto Emplea.");
-        setNecesitaLogin(true);
-        setMsalListo(true);
+
+        if (!cancelado) {
+          setMensaje("Inicia sesión para usar Puerto Emplea.");
+          setNecesitaLogin(true);
+          setMsalListo(true);
+        }
       }
     };
 
     cargarChat();
+
+    return () => {
+      cancelado = true;
+    };
   }, []);
 
   const styleOptions = {
@@ -210,12 +274,15 @@ function Chat() {
       <div className="loading">
         <div className="loading-card">
           <h1>Puerto Emplea</h1>
+
           <p>{mensaje}</p>
+
           {usuario && (
             <p>
               Usuario conectado: <strong>{usuario}</strong>
             </p>
           )}
+
           {necesitaLogin && (
             <button
               onClick={iniciarSesion}
@@ -248,6 +315,7 @@ function Chat() {
             alt="Puerto Emplea"
             className="logo"
           />
+
           <div className="brand-subtitle">Asistente IA</div>
         </div>
 

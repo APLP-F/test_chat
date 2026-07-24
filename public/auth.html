@@ -4,24 +4,84 @@
     <meta charset="UTF-8" />
     <title>Autenticación Puerto Emplea</title>
   </head>
+
   <body>
+    <p style="font-family: Segoe UI, sans-serif; padding: 24px;">
+      Completando autenticación...
+    </p>
+
     <script type="module">
-      import { PublicClientApplication } from 'https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.10.0/+esm';
+      import { PublicClientApplication } from "https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.10.0/+esm";
+
+      const clientId = "84ef3bdb-a4d5-4094-8e8f-c763b1a3edbb";
+      const tenantId = "436efeb8-20ec-47a9-9dbb-3deab23539f5";
+
+      const redirectUri = "https://aplp-f.github.io/test_chat/auth.html";
+
+      const loginRequest = {
+        scopes: ["https://api.powerplatform.com/.default"],
+        redirectUri
+      };
 
       const msalInstance = new PublicClientApplication({
         auth: {
-          clientId: '84ef3bdb-a4d5-4094-8e8f-c763b1a3edbb',
-          authority: 'https://login.microsoftonline.com/436efeb8-20ec-47a9-9dbb-3deab23539f5',
-          redirectUri: 'https://aplp-f.github.io/test_chat/auth.html'
+          clientId,
+          authority: `https://login.microsoftonline.com/${tenantId}`,
+          redirectUri
         },
         cache: {
-          cacheLocation: 'sessionStorage',
+          cacheLocation: "sessionStorage",
           storeAuthStateInCookie: true
         }
       });
 
-      await msalInstance.initialize();
-      await msalInstance.handleRedirectPromise();
+      function enviarResultado(data) {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage(data, window.location.origin);
+        }
+      }
+
+      try {
+        await msalInstance.initialize();
+
+        const result = await msalInstance.handleRedirectPromise();
+
+        if (result && result.account) {
+          let accessToken = result.accessToken;
+
+          if (!accessToken) {
+            const silentResult = await msalInstance.acquireTokenSilent({
+              ...loginRequest,
+              account: result.account
+            });
+
+            accessToken = silentResult.accessToken;
+          }
+
+          enviarResultado({
+            type: "PUERTO_EMPLEA_AUTH_SUCCESS",
+            username: result.account.username,
+            accessToken
+          });
+
+          window.close();
+        } else {
+          await msalInstance.loginRedirect({
+            ...loginRequest,
+            prompt: "select_account"
+          });
+        }
+      } catch (error) {
+        enviarResultado({
+          type: "PUERTO_EMPLEA_AUTH_ERROR",
+          error: error instanceof Error ? error.message : String(error)
+        });
+
+        document.body.innerHTML =
+          "<pre style='font-family: Consolas, monospace; white-space: pre-wrap; padding:24px;'>Error autenticando:\n" +
+          (error instanceof Error ? error.message : String(error)) +
+          "</pre>";
+      }
     </script>
   </body>
 </html>
