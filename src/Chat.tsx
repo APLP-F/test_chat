@@ -10,6 +10,7 @@ import {
 import {
   msalConfig,
   copilotLoginRequest,
+  appRedirectUri,
   popupRedirectUri,
 } from "./authConfig";
 
@@ -28,6 +29,8 @@ function Chat() {
   const [cargando, setCargando] = useState(false);
   const [msalListo, setMsalListo] = useState(false);
 
+  const estaEnIframe = window.self !== window.top;
+
   const conectarConCuenta = async (cuenta: AccountInfo) => {
     setCargando(true);
 
@@ -41,14 +44,23 @@ function Chat() {
         tokenResult = await msalInstance.acquireTokenSilent({
           ...copilotLoginRequest,
           account: cuenta,
-          redirectUri: popupRedirectUri,
         });
       } catch {
-        tokenResult = await msalInstance.acquireTokenPopup({
-          ...copilotLoginRequest,
-          account: cuenta,
-          redirectUri: popupRedirectUri,
-        });
+        if (estaEnIframe) {
+          tokenResult = await msalInstance.acquireTokenPopup({
+            ...copilotLoginRequest,
+            account: cuenta,
+            redirectUri: popupRedirectUri,
+          });
+        } else {
+          await msalInstance.acquireTokenRedirect({
+            ...copilotLoginRequest,
+            account: cuenta,
+            redirectUri: appRedirectUri,
+          });
+
+          return;
+        }
       }
 
       setMensaje("Conectando con Puerto Emplea...");
@@ -82,26 +94,42 @@ function Chat() {
     setCargando(true);
     setMensaje("Abriendo inicio de sesión...");
 
-    msalInstance
-      .loginPopup({
-        ...copilotLoginRequest,
-        prompt: "select_account",
-        redirectUri: popupRedirectUri,
-      })
-      .then(async (loginResult) => {
-        if (loginResult.account) {
-          await conectarConCuenta(loginResult.account);
-        } else {
-          setMensaje("No se pudo obtener la cuenta del usuario.");
+    if (estaEnIframe) {
+      msalInstance
+        .loginPopup({
+          ...copilotLoginRequest,
+          prompt: "select_account",
+          redirectUri: popupRedirectUri,
+        })
+        .then(async (loginResult) => {
+          if (loginResult.account) {
+            await conectarConCuenta(loginResult.account);
+          } else {
+            setMensaje("No se pudo obtener la cuenta del usuario.");
+            setNecesitaLogin(true);
+          }
+        })
+        .catch((error) => {
+          console.error("Error iniciando sesión con popup:", error);
+          setMensaje("No se pudo iniciar sesión.");
           setNecesitaLogin(true);
-        }
+        })
+        .finally(() => {
+          setCargando(false);
+        });
+
+      return;
+    }
+
+    msalInstance
+      .loginRedirect({
+        ...copilotLoginRequest,
+        redirectUri: appRedirectUri,
       })
       .catch((error) => {
-        console.error("Error iniciando sesión:", error);
+        console.error("Error iniciando sesión con redirect:", error);
         setMensaje("No se pudo iniciar sesión.");
         setNecesitaLogin(true);
-      })
-      .finally(() => {
         setCargando(false);
       });
   };
@@ -110,7 +138,17 @@ function Chat() {
     const cargarChat = async () => {
       try {
         await msalInstance.initialize();
+
+        const redirectResult = estaEnIframe
+          ? null
+          : await msalInstance.handleRedirectPromise();
+
         setMsalListo(true);
+
+        if (redirectResult?.account) {
+          await conectarConCuenta(redirectResult.account);
+          return;
+        }
 
         const cuentas = msalInstance.getAllAccounts();
 
