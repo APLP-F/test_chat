@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { PublicClientApplication } from "@azure/msal-browser";
 import type { AccountInfo } from "@azure/msal-browser";
-import { Components } from "botframework-webchat";
+import { Components, createStore } from "botframework-webchat";
 import {
   CopilotStudioClient,
   CopilotStudioWebChat,
@@ -31,6 +31,38 @@ function Chat() {
 
   const estaEnIframe = window.self !== window.top;
 
+  // Store que intercepta mensajes y los envía al PCF via postMessage
+  const store = useMemo(() => createStore(
+    {},
+    () => (next: any) => (action: any) => {
+      // Respuesta del agente
+      if (action.type === 'DIRECT_LINE/INCOMING_ACTIVITY') {
+        const activity = action.payload?.activity;
+        if (
+          activity?.from?.role === 'bot' &&
+          activity?.type === 'message' &&
+          activity?.text
+        ) {
+          window.parent.postMessage({
+            type: 'BOT_RESPONSE',
+            text: activity.text,
+            conversationId: activity.conversation?.id || ''
+          }, '*');
+        }
+      }
+
+      // Mensaje del usuario
+      if (action.type === 'WEB_CHAT/SEND_MESSAGE') {
+        window.parent.postMessage({
+          type: 'USER_MESSAGE',
+          text: action.payload?.text || ''
+        }, '*');
+      }
+
+      return next(action);
+    }
+  ), []);
+
   const conectarConCuenta = async (cuenta: AccountInfo) => {
     setCargando(true);
 
@@ -58,7 +90,6 @@ function Chat() {
             account: cuenta,
             redirectUri: appRedirectUri,
           });
-
           return;
         }
       }
@@ -70,10 +101,9 @@ function Chat() {
         tokenResult.accessToken
       );
 
-      const nuevaConexion =
-        CopilotStudioWebChat.createConnection(client, {
-          showTyping: true,
-        });
+      const nuevaConexion = CopilotStudioWebChat.createConnection(client, {
+        showTyping: true,
+      });
 
       setConnection(nuevaConexion);
       setNecesitaLogin(false);
@@ -87,9 +117,7 @@ function Chat() {
   };
 
   const iniciarSesion = () => {
-    if (!msalListo || cargando) {
-      return;
-    }
+    if (!msalListo || cargando) return;
 
     setCargando(true);
     setMensaje("Abriendo inicio de sesión...");
@@ -182,15 +210,12 @@ function Chat() {
       <div className="loading">
         <div className="loading-card">
           <h1>Puerto Emplea</h1>
-
           <p>{mensaje}</p>
-
           {usuario && (
             <p>
               Usuario conectado: <strong>{usuario}</strong>
             </p>
           )}
-
           {necesitaLogin && (
             <button
               onClick={iniciarSesion}
@@ -206,9 +231,7 @@ function Chat() {
                 cursor: cargando || !msalListo ? "not-allowed" : "pointer",
               }}
             >
-              {cargando
-                ? "Conectando..."
-                : "Iniciar sesión con Microsoft"}
+              {cargando ? "Conectando..." : "Iniciar sesión con Microsoft"}
             </button>
           )}
         </div>
@@ -225,33 +248,23 @@ function Chat() {
             alt="Puerto Emplea"
             className="logo"
           />
-
-          <div className="brand-subtitle">
-            Asistente IA
-          </div>
+          <div className="brand-subtitle">Asistente IA</div>
         </div>
 
-        <button className="new-chat-btn">
-          + Nueva conversación
-        </button>
+        <button className="new-chat-btn">+ Nueva conversación</button>
 
-        <div className="history-title">
-          Conversaciones
-        </div>
+        <div className="history-title">Conversaciones</div>
 
-        <div className="history-item active">
-          Conversación actual
-        </div>
+        <div className="history-item active">Conversación actual</div>
 
-        <div className="user-info">
-          {usuario}
-        </div>
+        <div className="user-info">{usuario}</div>
       </aside>
 
       <main className="chat-area">
         <div className="chat-wrapper">
           <Composer
             directLine={connection}
+            store={store}
             styleOptions={styleOptions}
           >
             <BasicWebChat />
