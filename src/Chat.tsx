@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PublicClientApplication } from "@azure/msal-browser";
 import type { AccountInfo } from "@azure/msal-browser";
 import { Components, createStore } from "botframework-webchat";
@@ -127,7 +127,11 @@ function Chat() {
     initialChatData.activeConversationId
   );
 
+  const activeConversationIdRef = useRef(initialChatData.activeConversationId);
+  const liveConversationIdRef = useRef(initialChatData.activeConversationId);
+
   const [webChatKey, setWebChatKey] = useState(createId());
+  const [modoHistorial, setModoHistorial] = useState(false);
 
   const estaEnIframe = window.self !== window.top;
 
@@ -178,8 +182,10 @@ function Chat() {
     });
   }
 
-  function createWebChatStore(conversationId: string) {
+  function createWebChatStore() {
     return createStore({}, () => (next: any) => (action: any) => {
+      const currentLiveConversationId = liveConversationIdRef.current;
+
       if (action.type === "DIRECT_LINE/INCOMING_ACTIVITY") {
         const activity = action.payload?.activity;
 
@@ -188,7 +194,11 @@ function Chat() {
           activity?.type === "message" &&
           activity?.text
         ) {
-          appendMessageToConversation(conversationId, "bot", activity.text);
+          appendMessageToConversation(
+            currentLiveConversationId,
+            "bot",
+            activity.text
+          );
 
           window.parent.postMessage(
             {
@@ -204,7 +214,11 @@ function Chat() {
       if (action.type === "WEB_CHAT/SEND_MESSAGE") {
         const userText = action.payload?.text || "";
 
-        appendMessageToConversation(conversationId, "user", userText);
+        appendMessageToConversation(
+          currentLiveConversationId,
+          "user",
+          userText
+        );
 
         window.parent.postMessage(
           {
@@ -219,9 +233,7 @@ function Chat() {
     });
   }
 
-  const [store, setStore] = useState<any>(() =>
-    createWebChatStore(initialChatData.activeConversationId)
-  );
+  const [store, setStore] = useState<any>(() => createWebChatStore());
 
   const activeConversation = useMemo(() => {
     return (
@@ -343,7 +355,12 @@ function Chat() {
 
     setActiveConversationId(newConversation.id);
 
-    const newStore = createWebChatStore(newConversation.id);
+    activeConversationIdRef.current = newConversation.id;
+    liveConversationIdRef.current = newConversation.id;
+
+    setModoHistorial(false);
+
+    const newStore = createWebChatStore();
 
     setStore(newStore);
     setWebChatKey(createId());
@@ -372,6 +389,13 @@ function Chat() {
 
   const seleccionarConversacion = (conversationId: string): void => {
     setActiveConversationId(conversationId);
+    activeConversationIdRef.current = conversationId;
+
+    if (conversationId === liveConversationIdRef.current) {
+      setModoHistorial(false);
+    } else {
+      setModoHistorial(true);
+    }
   };
 
   useEffect(() => {
@@ -483,7 +507,7 @@ function Chat() {
     hideUploadButton: false,
   };
 
-  if (!connection) {
+  if (!connection && !modoHistorial) {
     return (
       <div className="loading">
         <div className="loading-card">
@@ -561,14 +585,56 @@ function Chat() {
 
       <main className="chat-area">
         <div className="chat-wrapper">
-          <Composer
-            key={webChatKey}
-            directLine={connection}
-            store={store}
-            styleOptions={styleOptions}
-          >
-            <BasicWebChat />
-          </Composer>
+          {modoHistorial ? (
+            <div className="saved-history">
+              <div className="saved-history-header">
+                <strong>{activeConversation?.title || "Conversación"}</strong>
+                <span>Historial guardado</span>
+              </div>
+
+              <div className="saved-history-messages">
+                {activeConversation?.messages.length ? (
+                  activeConversation.messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={
+                        message.role === "user"
+                          ? "saved-message saved-message-user"
+                          : "saved-message saved-message-bot"
+                      }
+                    >
+                      <div className="saved-message-role">
+                        {message.role === "user" ? "Tú" : "Puerto Emplea"}
+                      </div>
+
+                      <div className="saved-message-text">{message.text}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="saved-history-empty">
+                    Esta conversación todavía no tiene mensajes guardados.
+                  </div>
+                )}
+              </div>
+
+              <button
+                className="new-chat-btn"
+                onClick={crearNuevaConversacion}
+                style={{ marginTop: "16px" }}
+              >
+                + Nueva conversación
+              </button>
+            </div>
+          ) : (
+            <Composer
+              key={webChatKey}
+              directLine={connection}
+              store={store}
+              styleOptions={styleOptions}
+            >
+              <BasicWebChat />
+            </Composer>
+          )}
         </div>
       </main>
     </div>
