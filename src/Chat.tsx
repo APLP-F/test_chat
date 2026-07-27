@@ -130,8 +130,26 @@ function createContinuationTitle(title: string): string {
   return continuationTitle;
 }
 
+function isPuertoEmpleaGreeting(text: string): boolean {
+  const normalizedText = text
+    .trim()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+
+  return (
+    normalizedText.includes("hola, soy puerto emplea") &&
+    normalizedText.includes("en que puedo ayudarle")
+  );
+}
+
 function buildContinuationContext(conversation: SavedConversation): string {
-  const recentMessages = conversation.messages.slice(-16);
+  const recentMessages = conversation.messages
+    .filter(
+      (message) =>
+        !(message.role === "bot" && isPuertoEmpleaGreeting(message.text))
+    )
+    .slice(-16);
 
   const conversationText = recentMessages
     .map((message) => {
@@ -234,6 +252,8 @@ function Chat() {
     initialChatData.activeConversationId
   );
 
+  const ocultarSaludoInicialRef = useRef(false);
+
   const [webChatKey, setWebChatKey] = useState(createId());
   const [modoHistorial, setModoHistorial] = useState(false);
 
@@ -326,6 +346,14 @@ function Chat() {
           activity?.type === "message" &&
           activity?.text
         ) {
+          if (ocultarSaludoInicialRef.current) {
+            ocultarSaludoInicialRef.current = false;
+
+            if (isPuertoEmpleaGreeting(activity.text)) {
+              return;
+            }
+          }
+
           appendMessageToConversation(
             currentLiveConversationId,
             "bot",
@@ -570,17 +598,25 @@ function Chat() {
     }
 
     const now = new Date().toISOString();
+    const filteredPreviousMessages = sourceConversation.messages.filter(
+      (message) =>
+        !(message.role === "bot" && isPuertoEmpleaGreeting(message.text))
+    );
+
     const continuationConversation: SavedConversation = {
       id: createId(),
       title: createContinuationTitle(sourceConversation.title),
       createdAt: now,
       updatedAt: now,
-      messages: [...sourceConversation.messages],
+      messages: [...filteredPreviousMessages],
       continuedFromTitle: sourceConversation.title,
-      continuedFromMessages: [...sourceConversation.messages],
+      continuedFromMessages: [...filteredPreviousMessages],
     };
 
-    const continuationContext = buildContinuationContext(sourceConversation);
+    const continuationContext = buildContinuationContext({
+      ...sourceConversation,
+      messages: filteredPreviousMessages,
+    });
 
     setConversations((previous) => {
       const next = [continuationConversation, ...previous];
@@ -602,6 +638,8 @@ function Chat() {
     setCargando(true);
 
     try {
+      ocultarSaludoInicialRef.current = true;
+
       const client = new CopilotStudioClient(settings, accessTokenActual);
 
       const nuevaConexion = await CopilotStudioWebChat.createConnection(
@@ -1056,7 +1094,7 @@ function Chat() {
                     borderBottom: "1px solid #d7e8fb",
                     background: "#f7fbff",
                     padding: "14px 18px",
-                    maxHeight: "42%",
+                    maxHeight: "36vh",
                     overflowY: "auto",
                   }}
                 >
