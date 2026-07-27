@@ -39,6 +39,8 @@ interface SavedConversation {
   createdAt: string;
   updatedAt: string;
   messages: SavedMessage[];
+  continuedFromTitle?: string;
+  continuedFromMessages?: SavedMessage[];
 }
 
 function createId(): string {
@@ -97,6 +99,10 @@ function normalizeConversation(
     createdAt: conversation.createdAt || now,
     updatedAt: conversation.updatedAt || conversation.createdAt || now,
     messages: safeMessages,
+    continuedFromTitle: conversation.continuedFromTitle,
+    continuedFromMessages: Array.isArray(conversation.continuedFromMessages)
+      ? conversation.continuedFromMessages
+      : undefined,
   };
 }
 
@@ -570,6 +576,8 @@ function Chat() {
       createdAt: now,
       updatedAt: now,
       messages: [...sourceConversation.messages],
+      continuedFromTitle: sourceConversation.title,
+      continuedFromMessages: [...sourceConversation.messages],
     };
 
     const continuationContext = buildContinuationContext(sourceConversation);
@@ -1034,14 +1042,82 @@ function Chat() {
               </button>
             </div>
           ) : (
-            <Composer
-              key={webChatKey}
-              directLine={connection}
-              store={store}
-              styleOptions={styleOptions}
+            <div
+              style={{
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+                minHeight: 0,
+              }}
             >
-              <BasicWebChat />
-            </Composer>
+              {activeConversation?.continuedFromMessages?.length ? (
+                <div
+                  style={{
+                    borderBottom: "1px solid #d7e8fb",
+                    background: "#f7fbff",
+                    padding: "14px 18px",
+                    maxHeight: "42%",
+                    overflowY: "auto",
+                  }}
+                >
+                  <div
+                    style={{
+                      color: "#0d3b66",
+                      fontWeight: 700,
+                      marginBottom: "8px",
+                    }}
+                  >
+                    Contexto anterior: {activeConversation.continuedFromTitle || "conversación"}
+                  </div>
+
+                  <div
+                    style={{
+                      color: "#4b5563",
+                      fontSize: "13px",
+                      marginBottom: "12px",
+                    }}
+                  >
+                    Estos son los mensajes anteriores que se están usando como contexto para continuar.
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "10px",
+                    }}
+                  >
+                    {activeConversation.continuedFromMessages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={
+                          message.role === "user"
+                            ? "saved-message saved-message-user"
+                            : "saved-message saved-message-bot"
+                        }
+                      >
+                        <div className="saved-message-role">
+                          {message.role === "user" ? "Tú" : "Puerto Emplea"}
+                        </div>
+
+                        <div className="saved-message-text">{message.text}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <Composer
+                  key={webChatKey}
+                  directLine={connection}
+                  store={store}
+                  styleOptions={styleOptions}
+                >
+                  <BasicWebChat />
+                </Composer>
+              </div>
+            </div>
           )}
         </div>
       </main>
