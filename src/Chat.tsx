@@ -64,6 +64,14 @@ function createConversationTitle(text: string): string {
   return cleanText;
 }
 
+function cleanConversationTitle(title: string): string {
+  const cleanTitle = title
+    .replace(/^(Continuación:\s*)+/i, "")
+    .trim();
+
+  return cleanTitle || DEFAULT_CONVERSATION_TITLE;
+}
+
 function getTitleFromFirstUserMessage(messages: SavedMessage[]): string {
   const firstUserMessage = messages.find(
     (message) => message.role === "user" && message.text?.trim()
@@ -85,7 +93,9 @@ function normalizeConversation(
     ? conversation.messages
     : [];
 
-  const currentTitle = conversation.title || DEFAULT_CONVERSATION_TITLE;
+  const currentTitle = cleanConversationTitle(
+    conversation.title || DEFAULT_CONVERSATION_TITLE
+  );
 
   const normalizedTitle =
     currentTitle === DEFAULT_CONVERSATION_TITLE
@@ -218,7 +228,7 @@ function Chat() {
 
   const [webChatKey, setWebChatKey] = useState(createId());
   const [modoHistorial, setModoHistorial] = useState(false);
-  const [resumedConversationId, setResumedConversationId] = useState<string | null>(null);
+  const [, setResumedConversationId] = useState<string | null>(null);
 
   const estaEnIframe = window.self !== window.top;
 
@@ -868,7 +878,15 @@ function Chat() {
 
         <div className="history-title">Conversaciones</div>
 
-        <div className="conversation-list">
+        <div
+          className="conversation-list"
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            paddingRight: "4px",
+          }}
+        >
           {conversations.map((conversation) => {
             const isLiveConversation = conversation.id === liveConversationId;
             const isSelectedConversation = conversation.id === activeConversation?.id;
@@ -972,33 +990,10 @@ function Chat() {
                   border: "1px solid #d7e8fb",
                 }}
               >
-                Esta conversación está guardada como historial. Para continuar con
-                otra consulta, usa <strong>+ Nueva conversación</strong>.
-              </div>
-
-              <div className="saved-history-messages">
-                {activeConversation?.messages.length ? (
-                  activeConversation.messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={
-                        message.role === "user"
-                          ? "saved-message saved-message-user"
-                          : "saved-message saved-message-bot"
-                      }
-                    >
-                      <div className="saved-message-role">
-                        {message.role === "user" ? "Tú" : "Puerto Emplea"}
-                      </div>
-
-                      <div className="saved-message-text">{message.text}</div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="saved-history-empty">
-                    Esta conversación todavía no tiene mensajes guardados.
-                  </div>
-                )}
+                El historial de esta conversación se muestra en el panel derecho.
+                {activeConversation?.copilotConversationId
+                  ? " Puedes reabrirla desde el botón del panel derecho."
+                  : " Esta conversación no tiene identificador real de Copilot guardado, por lo que se mantiene como solo lectura."}
               </div>
 
               <button
@@ -1010,85 +1005,155 @@ function Chat() {
               </button>
             </div>
           ) : (
-            <div
-              style={{
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-                minHeight: 0,
-              }}
+            <Composer
+              key={webChatKey}
+              directLine={connection}
+              store={store}
+              styleOptions={styleOptions}
             >
-              {resumedConversationId === activeConversation?.id && activeConversation?.messages?.length ? (
-                <div
-                  style={{
-                    borderBottom: "1px solid #d7e8fb",
-                    background: "#f7fbff",
-                    padding: "14px 18px",
-                    maxHeight: "36vh",
-                    overflowY: "auto",
-                  }}
-                >
-                  <div
-                    style={{
-                      color: "#0d3b66",
-                      fontWeight: 700,
-                      marginBottom: "8px",
-                    }}
-                  >
-                    Historial de la conversación
-                  </div>
-
-                  <div
-                    style={{
-                      color: "#4b5563",
-                      fontSize: "13px",
-                      marginBottom: "12px",
-                    }}
-                  >
-                    Estos son los mensajes anteriores de esta conversación. El chat está reabierto usando el identificador real de Copilot cuando está disponible.
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "10px",
-                    }}
-                  >
-                    {activeConversation.messages.map((message) => (
-                      <div
-                        key={message.id}
-                        className={
-                          message.role === "user"
-                            ? "saved-message saved-message-user"
-                            : "saved-message saved-message-bot"
-                        }
-                      >
-                        <div className="saved-message-role">
-                          {message.role === "user" ? "Tú" : "Puerto Emplea"}
-                        </div>
-
-                        <div className="saved-message-text">{message.text}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              <div style={{ flex: 1, minHeight: 0 }}>
-                <Composer
-                  key={webChatKey}
-                  directLine={connection}
-                  store={store}
-                  styleOptions={styleOptions}
-                >
-                  <BasicWebChat />
-                </Composer>
-              </div>
-            </div>
+              <BasicWebChat />
+            </Composer>
           )}
         </div>
       </main>
+
+      {activeConversation?.messages?.length ? (
+        <aside
+          style={{
+            width: "390px",
+            minWidth: "390px",
+            height: "100%",
+            borderLeft: "1px solid #e5edf5",
+            background: "#f8fbff",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: "16px",
+              borderBottom: "1px solid #e5edf5",
+              background: "#ffffff",
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 800,
+                color: "#0d3b66",
+                marginBottom: "4px",
+              }}
+            >
+              Historial de la conversación
+            </div>
+
+            <div
+              style={{
+                fontSize: "12px",
+                color: "#6b7280",
+                marginBottom: "12px",
+              }}
+            >
+              {activeConversation.title}
+            </div>
+
+            {activeConversation.id === liveConversationId && !modoHistorial ? (
+              <span
+                style={{
+                  display: "inline-block",
+                  padding: "4px 8px",
+                  borderRadius: "999px",
+                  background: "#16a34a",
+                  color: "#ffffff",
+                  fontSize: "11px",
+                  fontWeight: 800,
+                }}
+              >
+                ACTIVA
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() =>
+                  activeConversation && seleccionarConversacion(activeConversation.id)
+                }
+                disabled={
+                  cargando ||
+                  !activeConversation?.copilotConversationId ||
+                  !accessTokenActual ||
+                  !usuario
+                }
+                style={{
+                  width: "100%",
+                  border: "none",
+                  borderRadius: "10px",
+                  background:
+                    activeConversation?.copilotConversationId && accessTokenActual && usuario
+                      ? "#0d3b66"
+                      : "#9ca3af",
+                  color: "#ffffff",
+                  padding: "10px 12px",
+                  cursor:
+                    activeConversation?.copilotConversationId && accessTokenActual && usuario
+                      ? "pointer"
+                      : "not-allowed",
+                  fontWeight: 700,
+                }}
+              >
+                🔄 Continuar conversación
+              </button>
+            )}
+
+            {!activeConversation?.copilotConversationId && (
+              <div
+                style={{
+                  marginTop: "10px",
+                  padding: "9px 10px",
+                  borderRadius: "9px",
+                  background: "#fff7ed",
+                  color: "#9a3412",
+                  fontSize: "12px",
+                  border: "1px solid #fed7aa",
+                }}
+              >
+                Esta conversación fue creada antes de guardar el identificador real
+                de Copilot. Puedes verla como historial, pero no reabrirla con
+                contexto real.
+              </div>
+            )}
+          </div>
+
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: "auto",
+              padding: "14px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+            }}
+          >
+            {activeConversation.messages.map((message) => (
+              <div
+                key={message.id}
+                className={
+                  message.role === "user"
+                    ? "saved-message saved-message-user"
+                    : "saved-message saved-message-bot"
+                }
+                style={{ maxWidth: "100%" }}
+              >
+                <div className="saved-message-role">
+                  {message.role === "user" ? "Tú" : "Puerto Emplea"}
+                </div>
+
+                <div className="saved-message-text">{message.text}</div>
+              </div>
+            ))}
+          </div>
+        </aside>
+      ) : null}
     </div>
   );
 }
