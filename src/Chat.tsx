@@ -22,6 +22,7 @@ const { BasicWebChat, Composer } = Components;
 const msalInstance = new PublicClientApplication(msalConfig);
 
 const STORAGE_KEY = "puerto_emplea_chat_conversations_v1";
+const DEFAULT_CONVERSATION_TITLE = "Conversación actual";
 
 type ChatRole = "user" | "bot";
 
@@ -48,12 +49,63 @@ function createId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function createConversationTitle(text: string): string {
+  const cleanText = text.trim().replace(/\s+/g, " ");
+
+  if (!cleanText) {
+    return DEFAULT_CONVERSATION_TITLE;
+  }
+
+  if (cleanText.length > 42) {
+    return `${cleanText.slice(0, 42)}...`;
+  }
+
+  return cleanText;
+}
+
+function getTitleFromFirstUserMessage(messages: SavedMessage[]): string {
+  const firstUserMessage = messages.find(
+    (message) => message.role === "user" && message.text?.trim()
+  );
+
+  if (!firstUserMessage) {
+    return DEFAULT_CONVERSATION_TITLE;
+  }
+
+  return createConversationTitle(firstUserMessage.text);
+}
+
+function normalizeConversation(
+  conversation: Partial<SavedConversation>
+): SavedConversation {
+  const now = new Date().toISOString();
+
+  const safeMessages = Array.isArray(conversation.messages)
+    ? conversation.messages
+    : [];
+
+  const currentTitle = conversation.title || DEFAULT_CONVERSATION_TITLE;
+
+  const normalizedTitle =
+    currentTitle === DEFAULT_CONVERSATION_TITLE
+      ? getTitleFromFirstUserMessage(safeMessages)
+      : currentTitle;
+
+  return {
+    id: conversation.id || createId(),
+    title: normalizedTitle,
+    createdAt: conversation.createdAt || now,
+    updatedAt: conversation.updatedAt || conversation.createdAt || now,
+    messages: safeMessages,
+  };
+}
+
 function createEmptyConversation(): SavedConversation {
   const now = new Date().toISOString();
 
   return {
     id: createId(),
-    title: "Conversación actual",
+    title: DEFAULT_CONVERSATION_TITLE,
     createdAt: now,
     updatedAt: now,
     messages: [],
@@ -74,7 +126,13 @@ function loadStoredConversations(): SavedConversation[] {
       return [];
     }
 
-    return [...parsed] as SavedConversation[];
+    const normalized = parsed.map((conversation) =>
+      normalizeConversation(conversation as Partial<SavedConversation>)
+    );
+
+    saveStoredConversations(normalized);
+
+    return normalized;
   } catch {
     return [];
   }
@@ -166,15 +224,19 @@ function Chat() {
           return conversation;
         }
 
-        const isFirstUserMessage =
-          role === "user" && conversation.messages.length === 0;
+        const hasPreviousUserMessage = conversation.messages.some(
+          (message) => message.role === "user" && message.text?.trim()
+        );
+
+        const shouldRenameConversation =
+          role === "user" &&
+          !hasPreviousUserMessage &&
+          conversation.title === DEFAULT_CONVERSATION_TITLE;
 
         return {
           ...conversation,
-          title: isFirstUserMessage
-            ? cleanText.length > 42
-              ? `${cleanText.slice(0, 42)}...`
-              : cleanText
+          title: shouldRenameConversation
+            ? createConversationTitle(cleanText)
             : conversation.title,
           updatedAt: now,
           messages: [...conversation.messages, newMessage],
