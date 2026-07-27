@@ -23,20 +23,6 @@ const msalInstance = new PublicClientApplication(msalConfig);
 
 const STORAGE_KEY = "puerto_emplea_chat_conversations_v1";
 
-/*
-  IMPORTANTE:
-  Pega aquí la URL HTTP limpia del flujo de Power Automate.
-
-  Ejemplo:
-  const CREAR_CONVERSACION_FLOW_URL = "https://xxxxx";
-
-  NO debe contener:
-  <a href=
-  &quot;
-  </a>
-*/
-const CREAR_CONVERSACION_FLOW_URL = "PEGA_AQUI_TU_URL_HTTP_DEL_FLOW";
-
 type ChatRole = "user" | "bot";
 
 interface SavedMessage {
@@ -48,16 +34,10 @@ interface SavedMessage {
 
 interface SavedConversation {
   id: string;
-  dataverseRowId?: string;
   title: string;
   createdAt: string;
   updatedAt: string;
   messages: SavedMessage[];
-}
-
-interface CrearConversacionDataverseResponse {
-  ok?: boolean;
-  conversationRowId?: string;
 }
 
 function createId(): string {
@@ -73,7 +53,6 @@ function createEmptyConversation(): SavedConversation {
 
   return {
     id: createId(),
-    dataverseRowId: undefined,
     title: "Conversación actual",
     createdAt: now,
     updatedAt: now,
@@ -148,85 +127,13 @@ function Chat() {
     initialChatData.activeConversationId
   );
 
+  const activeConversationIdRef = useRef(initialChatData.activeConversationId);
   const liveConversationIdRef = useRef(initialChatData.activeConversationId);
 
   const [webChatKey, setWebChatKey] = useState(createId());
   const [modoHistorial, setModoHistorial] = useState(false);
 
   const estaEnIframe = window.self !== window.top;
-
-  const activeConversation = useMemo(() => {
-    return (
-      conversations.find(
-        (conversation) => conversation.id === activeConversationId
-      ) || conversations[0]
-    );
-  }, [conversations, activeConversationId]);
-
-  async function crearConversacionEnDataverse(
-    conversationId: string,
-    nombre: string,
-    primerMensaje: string,
-    accessToken: string
-  ): Promise<string | undefined> {
-    if (
-      !CREAR_CONVERSACION_FLOW_URL ||
-      CREAR_CONVERSACION_FLOW_URL === "PEGA_AQUI_TU_URL_HTTP_DEL_FLOW"
-    ) {
-      console.warn(
-        "No se ha configurado CREAR_CONVERSACION_FLOW_URL en Chat.tsx"
-      );
-
-      return undefined;
-    }
-
-    console.log("VOY A LLAMAR AL FLOW");
-    console.log("URL Flow:", CREAR_CONVERSACION_FLOW_URL);
-
-    const response = await fetch(CREAR_CONVERSACION_FLOW_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        conversationId,
-        nombre,
-        primerMensaje,
-      }),
-    });
-
-    console.log("Respuesta Flow status:", response.status);
-
-    const responseText = await response.text();
-
-    console.log("Respuesta Flow body:", responseText);
-
-    if (!response.ok) {
-      throw new Error(
-        `Power Automate respondió con estado ${response.status}: ${responseText}`
-      );
-    }
-
-    if (!responseText) {
-      return undefined;
-    }
-
-    try {
-      const data = JSON.parse(
-        responseText
-      ) as CrearConversacionDataverseResponse;
-
-      if (data?.conversationRowId) {
-        return data.conversationRowId;
-      }
-
-      return undefined;
-    } catch {
-      console.warn("La respuesta del Flow no era JSON válido.");
-      return undefined;
-    }
-  }
 
   function appendMessageToConversation(
     conversationId: string,
@@ -327,6 +234,14 @@ function Chat() {
   }
 
   const [store, setStore] = useState<any>(() => createWebChatStore());
+
+  const activeConversation = useMemo(() => {
+    return (
+      conversations.find(
+        (conversation) => conversation.id === activeConversationId
+      ) || conversations[0]
+    );
+  }, [conversations, activeConversationId]);
 
   const conectarConToken = async (
     username: string,
@@ -430,39 +345,18 @@ function Chat() {
 
     const newConversation = createEmptyConversation();
 
-    console.log("ENTRA EN CREAR CONVERSACION");
-
-    setCargando(true);
-    setMensaje("Creando conversación en Dataverse...");
-
-    let dataverseRowId: string | undefined;
-
-    try {
-      dataverseRowId = await crearConversacionEnDataverse(
-        newConversation.id,
-        "Nueva conversación",
-        "",
-        accessTokenActual
-      );
-    } catch (error) {
-      console.error("Error creando conversación en Dataverse:", error);
-    }
-
-    const conversationToStore: SavedConversation = {
-      ...newConversation,
-      dataverseRowId,
-    };
-
     setConversations((previous) => {
-      const next = [conversationToStore, ...previous];
+      const next = [newConversation, ...previous];
 
       saveStoredConversations(next);
 
       return next;
     });
 
-    setActiveConversationId(conversationToStore.id);
-    liveConversationIdRef.current = conversationToStore.id;
+    setActiveConversationId(newConversation.id);
+
+    activeConversationIdRef.current = newConversation.id;
+    liveConversationIdRef.current = newConversation.id;
 
     setModoHistorial(false);
 
@@ -490,13 +384,12 @@ function Chat() {
       console.error("Error creando nueva conversación:", error);
       setMensaje("No se pudo crear una nueva conversación.");
       setNecesitaLogin(false);
-    } finally {
-      setCargando(false);
     }
   };
 
   const seleccionarConversacion = (conversationId: string): void => {
     setActiveConversationId(conversationId);
+    activeConversationIdRef.current = conversationId;
 
     if (conversationId === liveConversationIdRef.current) {
       setModoHistorial(false);
@@ -655,16 +548,16 @@ function Chat() {
     <div className="app-layout">
       <aside className="sidebar">
         <div className="brand">
-          {`${import.meta.env.BASE_URL}logo.png`}
+          <img
+            src={`${import.meta.env.BASE_URL}logo.png`}
+            alt="Puerto Emplea"
+            className="logo"
+          />
 
           <div className="brand-subtitle">Asistente IA</div>
         </div>
 
-        <button
-          className="new-chat-btn"
-          onClick={crearNuevaConversacion}
-          disabled={cargando}
-        >
+        <button className="new-chat-btn" onClick={crearNuevaConversacion}>
           + Nueva conversación
         </button>
 
@@ -727,7 +620,6 @@ function Chat() {
               <button
                 className="new-chat-btn"
                 onClick={crearNuevaConversacion}
-                disabled={cargando}
                 style={{ marginTop: "16px" }}
               >
                 + Nueva conversación
