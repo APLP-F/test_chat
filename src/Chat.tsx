@@ -398,43 +398,6 @@ function Chat() {
     }
   };
 
-  const eliminarConversacion = (conversationId: string): void => {
-  const confirmar = window.confirm(
-    "¿Desea eliminar esta conversación?"
-  );
-
-  if (!confirmar) {
-    return;
-  }
-
-  setConversations((previous) => {
-    const next = previous.filter(
-      (conversation) => conversation.id !== conversationId
-    );
-
-    if (next.length === 0) {
-      const nuevaConversacion = createEmptyConversation();
-
-      saveStoredConversations([nuevaConversacion]);
-
-      setActiveConversationId(nuevaConversacion.id);
-
-      activeConversationIdRef.current = nuevaConversacion.id;
-      liveConversationIdRef.current = nuevaConversacion.id;
-
-      return [nuevaConversacion];
-    }
-
-    saveStoredConversations(next);
-
-    if (conversationId === activeConversationId) {
-      setActiveConversationId(next[0].id);
-      activeConversationIdRef.current = next[0].id;
-    }
-
-    return next;
-  });
-};
   useEffect(() => {
     const recibirMensajeAuth = async (event: MessageEvent) => {
       if (event.origin !== window.location.origin) {
@@ -600,53 +563,36 @@ function Chat() {
 
         <div className="history-title">Conversaciones</div>
 
-        <div className="conversation-list">
-  {conversations.map((conversation) => (
-    <div
-      key={conversation.id}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "6px",
-        marginBottom: "6px",
-      }}
-    >
-      <button
-        className={
-          conversation.id === activeConversation?.id
-            ? "history-item active"
-            : "history-item"
-        }
-        style={{ flex: 1 }}
-        onClick={() => seleccionarConversacion(conversation.id)}
-        title={conversation.title}
-      >
-        {conversation.title}
-      </button>
+        <div
+          style={{
+            backgroundColor: "red",
+            color: "white",
+            padding: "12px",
+            fontWeight: "bold",
+            textAlign: "center",
+            marginBottom: "10px",
+            borderRadius: "8px"
+          }}
+        >
+          BOTON DE PRUEBA
+        </div>
 
-      <button
-        type="button"
-        title="Eliminar conversación"
-        style={{
-          width: "32px",
-          height: "32px",
-          border: "none",
-          borderRadius: "8px",
-          background: "#fee2e2",
-          color: "#b91c1c",
-          cursor: "pointer",
-          fontWeight: "bold",
-        }}
-        onClick={(event) => {
-          event.stopPropagation();
-          eliminarConversacion(conversation.id);
-        }}
-      >
-        ×
-      </button>
-    </div>
-  ))}
-</div>
+        <div className="conversation-list">
+          {conversations.map((conversation) => (
+            <button
+              key={conversation.id}
+              className={
+                conversation.id === activeConversation?.id
+                  ? "history-item active"
+                  : "history-item"
+              }
+              onClick={() => seleccionarConversacion(conversation.id)}
+              title={conversation.title}
+            >
+              {conversation.title}
+            </button>
+          ))}
+        </div>
 
         <div className="user-info">{usuario}</div>
       </aside>
