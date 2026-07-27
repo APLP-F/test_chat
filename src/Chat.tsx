@@ -539,36 +539,6 @@ ${userText}`,
     }
   };
 
-  function postContextToCopilot(directLine: any, contextText: string): Promise<void> {
-    if (!directLine?.postActivity) {
-      return Promise.resolve();
-    }
-
-    return new Promise((resolve) => {
-      try {
-        directLine
-          .postActivity({
-            type: "message",
-            text: contextText,
-            from: {
-              id: usuario || "usuario",
-              role: "user",
-            },
-          })
-          .subscribe({
-            next: () => resolve(),
-            error: (error: unknown) => {
-              console.warn("No se pudo enviar el contexto de continuación:", error);
-              resolve();
-            },
-            complete: () => resolve(),
-          });
-      } catch (error) {
-        console.warn("No se pudo preparar el contexto de continuación:", error);
-        resolve();
-      }
-    });
-  }
 
   const crearNuevaConversacion = async (): Promise<void> => {
     if (!accessTokenActual || !usuario) {
