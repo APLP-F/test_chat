@@ -112,6 +112,37 @@ function createEmptyConversation(): SavedConversation {
   };
 }
 
+
+function createContinuationTitle(title: string): string {
+  const baseTitle = title && title !== DEFAULT_CONVERSATION_TITLE ? title : "conversación";
+  const continuationTitle = `Continuación: ${baseTitle}`;
+
+  if (continuationTitle.length > 42) {
+    return `${continuationTitle.slice(0, 42)}...`;
+  }
+
+  return continuationTitle;
+}
+
+function buildContinuationContext(conversation: SavedConversation): string {
+  const recentMessages = conversation.messages.slice(-16);
+
+  const conversationText = recentMessages
+    .map((message) => {
+      const speaker = message.role === "user" ? "Usuario" : "Puerto Emplea";
+      return `${speaker}: ${message.text}`;
+    })
+    .join("\n");
+
+  return [
+    "Vamos a continuar una conversación anterior de Puerto Emplea.",
+    "Usa el siguiente historial como contexto para responder de forma coherente a partir de ahora.",
+    "No repitas todo el historial salvo que el usuario lo pida.",
+    "Historial anterior:",
+    conversationText || "No hay mensajes previos guardados.",
+  ].join("\n\n");
+}
+
 function loadStoredConversations(): SavedConversation[] {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -446,6 +477,37 @@ function Chat() {
     }
   };
 
+  function postContextToCopilot(directLine: any, contextText: string): Promise<void> {
+    if (!directLine?.postActivity) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      try {
+        directLine
+          .postActivity({
+            type: "message",
+            text: contextText,
+            from: {
+              id: usuario || "usuario",
+              role: "user",
+            },
+          })
+          .subscribe({
+            next: () => resolve(),
+            error: (error: unknown) => {
+              console.warn("No se pudo enviar el contexto de continuación:", error);
+              resolve();
+            },
+            complete: () => resolve(),
+          });
+      } catch (error) {
+        console.warn("No se pudo preparar el contexto de continuación:", error);
+        resolve();
+      }
+    });
+  }
+
   const crearNuevaConversacion = async (): Promise<void> => {
     if (!accessTokenActual || !usuario) {
       setMensaje("Inicia sesión para crear una nueva conversación.");
@@ -483,6 +545,78 @@ function Chat() {
       console.error("Error creando nueva conversación:", error);
       setMensaje("No se pudo crear una nueva conversación.");
       setNecesitaLogin(false);
+    }
+  };
+
+  const continuarConversacion = async (conversationId: string): Promise<void> => {
+    if (!accessTokenActual || !usuario) {
+      setMensaje("Inicia sesión para continuar una conversación.");
+      setNecesitaLogin(true);
+      return;
+    }
+
+    const sourceConversation = conversations.find(
+      (conversation) => conversation.id === conversationId
+    );
+
+    if (!sourceConversation) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const continuationConversation: SavedConversation = {
+      id: createId(),
+      title: createContinuationTitle(sourceConversation.title),
+      createdAt: now,
+      updatedAt: now,
+      messages: [...sourceConversation.messages],
+    };
+
+    const continuationContext = buildContinuationContext(sourceConversation);
+
+    setConversations((previous) => {
+      const next = [continuationConversation, ...previous];
+      saveStoredConversations(next);
+      return next;
+    });
+
+    setActiveConversationId(continuationConversation.id);
+    activeConversationIdRef.current = continuationConversation.id;
+    setLiveConversation(continuationConversation.id);
+    setModoHistorial(false);
+
+    const newStore = createWebChatStore();
+
+    setStore(newStore);
+    setWebChatKey(createId());
+    setConnection(null);
+    setMensaje("Continuando conversación...");
+    setCargando(true);
+
+    try {
+      const client = new CopilotStudioClient(settings, accessTokenActual);
+
+      const nuevaConexion = await CopilotStudioWebChat.createConnection(
+        client,
+        {
+          showTyping: true,
+        }
+      );
+
+      setConnection(nuevaConexion);
+      setNecesitaLogin(false);
+      setModoHistorial(false);
+      setMensaje("");
+
+      await postContextToCopilot(nuevaConexion, continuationContext);
+    } catch (error) {
+      console.error("Error continuando conversación:", error);
+      setMensaje("No se pudo continuar la conversación.");
+      setModoHistorial(true);
+      setLiveConversation(null);
+      setConnection(null);
+    } finally {
+      setCargando(false);
     }
   };
 
@@ -837,6 +971,34 @@ function Chat() {
                 Esta conversación está guardada como historial. Para continuar con
                 otra consulta, usa <strong>+ Nueva conversación</strong>.
               </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  activeConversation && continuarConversacion(activeConversation.id)
+                }
+                disabled={!activeConversation || !activeConversation.messages.length || cargando}
+                style={{
+                  width: "100%",
+                  border: "none",
+                  borderRadius: "10px",
+                  background: "#0d3b66",
+                  color: "#ffffff",
+                  padding: "12px 14px",
+                  marginBottom: "12px",
+                  cursor:
+                    !activeConversation || !activeConversation.messages.length || cargando
+                      ? "not-allowed"
+                      : "pointer",
+                  fontWeight: 700,
+                  opacity:
+                    !activeConversation || !activeConversation.messages.length || cargando
+                      ? 0.65
+                      : 1,
+                }}
+              >
+                🔄 Continuar conversación
+              </button>
 
               <div className="saved-history-messages">
                 {activeConversation?.messages.length ? (
