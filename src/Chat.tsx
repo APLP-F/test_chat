@@ -657,7 +657,7 @@ function Chat() {
         <div className="brand">
           {`${import.meta.env.BASE_URL}logo.png`}
 
-          <div className="brand-subtitle">PRUEBA MAIN</div>
+          <div className="brand-subtitle">Asistente IA</div>
         </div>
 
         <button
@@ -669,6 +669,22 @@ function Chat() {
         </button>
 
         <div className="history-title">Conversaciones</div>
+
+<button
+  style={{
+    width: "100%",
+    background: "#dc2626",
+    color: "white",
+    border: "none",
+    borderRadius: "8px",
+    padding: "10px",
+    marginBottom: "10px",
+    cursor: "pointer",
+    fontWeight: "bold"
+  }}
+>
+  BORRAR
+</button>
 
         <div className="conversation-list">
           {conversations.map((conversation) => (
