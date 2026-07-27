@@ -198,6 +198,24 @@ function Chat() {
 
   const estaEnIframe = window.self !== window.top;
 
+  function createAndActivateLocalConversation(): SavedConversation {
+    const newConversation = createEmptyConversation();
+
+    setConversations((previous) => {
+      const next = [newConversation, ...previous];
+      saveStoredConversations(next);
+      return next;
+    });
+
+    setActiveConversationId(newConversation.id);
+    activeConversationIdRef.current = newConversation.id;
+    liveConversationIdRef.current = newConversation.id;
+
+    setModoHistorial(false);
+
+    return newConversation;
+  }
+
   function appendMessageToConversation(
     conversationId: string,
     role: ChatRole,
@@ -324,6 +342,14 @@ function Chat() {
       setAccessTokenActual(accessToken);
       setMensaje("Conectando con Puerto Emplea...");
 
+      const newConversation = createAndActivateLocalConversation();
+
+      const newStore = createWebChatStore();
+
+      setStore(newStore);
+      setWebChatKey(createId());
+      setConnection(null);
+
       const client = new CopilotStudioClient(settings, accessToken);
 
       const nuevaConexion = await CopilotStudioWebChat.createConnection(
@@ -333,8 +359,13 @@ function Chat() {
         }
       );
 
+      liveConversationIdRef.current = newConversation.id;
+      activeConversationIdRef.current = newConversation.id;
+
       setConnection(nuevaConexion);
       setNecesitaLogin(false);
+      setModoHistorial(false);
+      setMensaje("");
     } catch (error) {
       console.error("Error conectando con Copilot Studio:", error);
       setMensaje("No se pudo conectar con Puerto Emplea.");
@@ -413,22 +444,7 @@ function Chat() {
       return;
     }
 
-    const newConversation = createEmptyConversation();
-
-    setConversations((previous) => {
-      const next = [newConversation, ...previous];
-
-      saveStoredConversations(next);
-
-      return next;
-    });
-
-    setActiveConversationId(newConversation.id);
-
-    activeConversationIdRef.current = newConversation.id;
-    liveConversationIdRef.current = newConversation.id;
-
-    setModoHistorial(false);
+    const newConversation = createAndActivateLocalConversation();
 
     const newStore = createWebChatStore();
 
@@ -447,8 +463,12 @@ function Chat() {
         }
       );
 
+      liveConversationIdRef.current = newConversation.id;
+      activeConversationIdRef.current = newConversation.id;
+
       setConnection(nuevaConexion);
       setNecesitaLogin(false);
+      setModoHistorial(false);
       setMensaje("");
     } catch (error) {
       console.error("Error creando nueva conversación:", error);
@@ -692,9 +712,7 @@ function Chat() {
             className="logo"
           />
 
-          <div className="brand-subtitle">
-            Asistente IA
-          </div>
+          <div className="brand-subtitle">Asistente IA</div>
         </div>
 
         <button className="new-chat-btn" onClick={crearNuevaConversacion}>
