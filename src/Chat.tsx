@@ -129,30 +129,6 @@ function isPuertoEmpleaGreeting(text: string): boolean {
   );
 }
 
-function buildContinuationContext(conversation: SavedConversation): string {
-  const recentMessages = conversation.messages
-    .filter(
-      (message) =>
-        !(message.role === "bot" && isPuertoEmpleaGreeting(message.text))
-    )
-    .slice(-16);
-
-  const conversationText = recentMessages
-    .map((message) => {
-      const speaker = message.role === "user" ? "Usuario" : "Puerto Emplea";
-      return `${speaker}: ${message.text}`;
-    })
-    .join("\n");
-
-  return [
-    "CONTEXTO PRIVADO PARA CONTINUAR UNA CONVERSACIÓN ANTERIOR DE PUERTO EMPLEA.",
-    "Debes utilizar este historial como contexto para interpretar referencias como 'esa oferta', 'ese candidato', 'lo anterior' o 'ese puesto'.",
-    "No respondas a este bloque como si fuera una pregunta nueva. Úsalo únicamente como memoria de la conversación anterior.",
-    "Historial anterior:",
-    conversationText || "No hay mensajes previos guardados.",
-  ].join("\n\n");
-}
-
 function loadStoredConversations(): SavedConversation[] {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -405,7 +381,6 @@ function Chat() {
 
       if (action.type === "WEB_CHAT/SEND_MESSAGE") {
         const userText = action.payload?.text || "";
-        let actionToSend = action;
 
         if (currentLiveConversationId) {
           appendMessageToConversation(
@@ -413,24 +388,6 @@ function Chat() {
             "user",
             userText
           );
-
-          const pendingContext =
-            pendingContinuationContextRef.current[currentLiveConversationId];
-
-          if (pendingContext) {
-            delete pendingContinuationContextRef.current[currentLiveConversationId];
-
-            actionToSend = {
-              ...action,
-              payload: {
-                ...action.payload,
-                text: `${pendingContext}
-
-Nueva pregunta del usuario:
-${userText}`,
-              },
-            };
-          }
         }
 
         window.parent.postMessage(
@@ -440,8 +397,6 @@ ${userText}`,
           },
           "*"
         );
-
-        return next(actionToSend);
       }
 
       return next(action);
