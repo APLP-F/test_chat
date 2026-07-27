@@ -686,9 +686,15 @@ function Chat() {
     <div className="app-layout">
       <aside className="sidebar">
         <div className="brand">
-          {`${import.meta.env.BASE_URL}logo.png`}
+          <img
+            src={`${import.meta.env.BASE_URL}logo.png`}
+            alt="Puerto Emplea"
+            className="logo"
+          />
 
-          <div className="brand-subtitle">Asistente IA</div>
+          <div className="brand-subtitle">
+            Asistente IA
+          </div>
         </div>
 
         <button className="new-chat-btn" onClick={crearNuevaConversacion}>
