@@ -120,14 +120,20 @@ function createEmptyConversation(): SavedConversation {
 
 
 function createContinuationTitle(title: string): string {
-  const baseTitle = title && title !== DEFAULT_CONVERSATION_TITLE ? title : "conversación";
-  const continuationTitle = `Continuación: ${baseTitle}`;
+  const titleWithoutContinuation = title
+    .replace(/^(Continuación:\s*)+/i, "")
+    .trim();
 
-  if (continuationTitle.length > 42) {
-    return `${continuationTitle.slice(0, 42)}...`;
+  const baseTitle =
+    titleWithoutContinuation && titleWithoutContinuation !== DEFAULT_CONVERSATION_TITLE
+      ? titleWithoutContinuation
+      : DEFAULT_CONVERSATION_TITLE;
+
+  if (baseTitle.length > 42) {
+    return `${baseTitle.slice(0, 42)}...`;
   }
 
-  return continuationTitle;
+  return baseTitle;
 }
 
 function isPuertoEmpleaGreeting(text: string): boolean {
@@ -159,9 +165,9 @@ function buildContinuationContext(conversation: SavedConversation): string {
     .join("\n");
 
   return [
-    "Vamos a continuar una conversación anterior de Puerto Emplea.",
-    "Usa el siguiente historial como contexto para responder de forma coherente a partir de ahora.",
-    "No repitas todo el historial salvo que el usuario lo pida.",
+    "CONTEXTO PRIVADO PARA CONTINUAR UNA CONVERSACIÓN ANTERIOR DE PUERTO EMPLEA.",
+    "Debes utilizar este historial como contexto para interpretar referencias como 'esa oferta', 'ese candidato', 'lo anterior' o 'ese puesto'.",
+    "No respondas a este bloque como si fuera una pregunta nueva. Úsalo únicamente como memoria de la conversación anterior.",
     "Historial anterior:",
     conversationText || "No hay mensajes previos guardados.",
   ].join("\n\n");
@@ -253,6 +259,7 @@ function Chat() {
   );
 
   const ocultarSaludoInicialRef = useRef(false);
+  const pendingContinuationContextRef = useRef<Record<string, string>>({});
 
   const [webChatKey, setWebChatKey] = useState(createId());
   const [modoHistorial, setModoHistorial] = useState(false);
@@ -373,6 +380,7 @@ function Chat() {
 
       if (action.type === "WEB_CHAT/SEND_MESSAGE") {
         const userText = action.payload?.text || "";
+        let actionToSend = action;
 
         if (currentLiveConversationId) {
           appendMessageToConversation(
@@ -380,6 +388,24 @@ function Chat() {
             "user",
             userText
           );
+
+          const pendingContext =
+            pendingContinuationContextRef.current[currentLiveConversationId];
+
+          if (pendingContext) {
+            delete pendingContinuationContextRef.current[currentLiveConversationId];
+
+            actionToSend = {
+              ...action,
+              payload: {
+                ...action.payload,
+                text: `${pendingContext}
+
+Nueva pregunta del usuario:
+${userText}`,
+              },
+            };
+          }
         }
 
         window.parent.postMessage(
@@ -389,6 +415,8 @@ function Chat() {
           },
           "*"
         );
+
+        return next(actionToSend);
       }
 
       return next(action);
@@ -627,6 +655,8 @@ function Chat() {
     setActiveConversationId(continuationConversation.id);
     activeConversationIdRef.current = continuationConversation.id;
     setLiveConversation(continuationConversation.id);
+    pendingContinuationContextRef.current[continuationConversation.id] =
+      continuationContext;
     setModoHistorial(false);
 
     const newStore = createWebChatStore();
@@ -654,7 +684,6 @@ function Chat() {
       setModoHistorial(false);
       setMensaje("");
 
-      await postContextToCopilot(nuevaConexion, continuationContext);
     } catch (error) {
       console.error("Error continuando conversación:", error);
       setMensaje("No se pudo continuar la conversación.");
