@@ -657,7 +657,7 @@ function Chat() {
         <div className="brand">
           {`${import.meta.env.BASE_URL}logo.png`}
 
-          <div className="brand-subtitle">Asistente IA</div>
+          <div className="brand-subtitle">PRUEBA MAIN</div>
         </div>
 
         <button
