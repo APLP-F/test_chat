@@ -35,7 +35,6 @@ interface SavedMessage {
 
 interface SavedConversation {
   id: string;
-  copilotConversationId?: string;
   title: string;
   createdAt: string;
   updatedAt: string;
@@ -94,7 +93,6 @@ function normalizeConversation(
 
   return {
     id: conversation.id || createId(),
-    copilotConversationId: conversation.copilotConversationId,
     title: normalizedTitle,
     createdAt: conversation.createdAt || now,
     updatedAt: conversation.updatedAt || conversation.createdAt || now,
@@ -107,7 +105,6 @@ function createEmptyConversation(): SavedConversation {
 
   return {
     id: createId(),
-    copilotConversationId: undefined,
     title: DEFAULT_CONVERSATION_TITLE,
     createdAt: now,
     updatedAt: now,
@@ -201,42 +198,6 @@ function Chat() {
 
   const estaEnIframe = window.self !== window.top;
 
-  function updateCopilotConversationId(
-    localConversationId: string,
-    copilotConversationId?: string
-  ): void {
-    if (!copilotConversationId) {
-      return;
-    }
-
-    setConversations((previous) => {
-      let changed = false;
-
-      const next = previous.map((conversation) => {
-        if (conversation.id !== localConversationId) {
-          return conversation;
-        }
-
-        if (conversation.copilotConversationId === copilotConversationId) {
-          return conversation;
-        }
-
-        changed = true;
-
-        return {
-          ...conversation,
-          copilotConversationId,
-        };
-      });
-
-      if (changed) {
-        saveStoredConversations(next);
-      }
-
-      return next;
-    });
-  }
-
   function createAndActivateLocalConversation(): SavedConversation {
     const newConversation = createEmptyConversation();
 
@@ -312,14 +273,6 @@ function Chat() {
 
       if (action.type === "DIRECT_LINE/INCOMING_ACTIVITY") {
         const activity = action.payload?.activity;
-        const realCopilotConversationId = activity?.conversation?.id;
-
-        if (currentLiveConversationId && realCopilotConversationId) {
-          updateCopilotConversationId(
-            currentLiveConversationId,
-            realCopilotConversationId
-          );
-        }
 
         if (
           currentLiveConversationId &&
@@ -337,7 +290,7 @@ function Chat() {
             {
               type: "BOT_RESPONSE",
               text: activity.text,
-              conversationId: realCopilotConversationId || "",
+              conversationId: activity.conversation?.id || "",
             },
             "*"
           );
@@ -378,55 +331,6 @@ function Chat() {
     );
   }, [conversations, activeConversationId]);
 
-  async function createCopilotConnectionForConversation(
-    localConversationId: string,
-    accessToken: string,
-    loadingMessage: string,
-    shouldResumeExistingConversation: boolean
-  ): Promise<void> {
-    const conversationToOpen = conversations.find(
-      (conversation) => conversation.id === localConversationId
-    );
-
-    const realCopilotConversationId = shouldResumeExistingConversation
-      ? conversationToOpen?.copilotConversationId
-      : undefined;
-
-    liveConversationIdRef.current = localConversationId;
-    activeConversationIdRef.current = localConversationId;
-
-    setActiveConversationId(localConversationId);
-    setModoHistorial(false);
-
-    const newStore = createWebChatStore();
-
-    setStore(newStore);
-    setWebChatKey(createId());
-    setConnection(null);
-    setMensaje(loadingMessage);
-
-    const client = new CopilotStudioClient(settings, accessToken);
-
-    const nuevaConexion = await CopilotStudioWebChat.createConnection(client, {
-      showTyping: true,
-      ...(realCopilotConversationId
-        ? { conversationId: realCopilotConversationId }
-        : {}),
-    });
-
-    if (nuevaConexion.conversationId) {
-      updateCopilotConversationId(
-        localConversationId,
-        nuevaConexion.conversationId
-      );
-    }
-
-    setConnection(nuevaConexion);
-    setNecesitaLogin(false);
-    setModoHistorial(false);
-    setMensaje("");
-  }
-
   const conectarConToken = async (
     username: string,
     accessToken: string
@@ -440,12 +344,28 @@ function Chat() {
 
       const newConversation = createAndActivateLocalConversation();
 
-      await createCopilotConnectionForConversation(
-        newConversation.id,
-        accessToken,
-        "Conectando con Puerto Emplea...",
-        false
+      const newStore = createWebChatStore();
+
+      setStore(newStore);
+      setWebChatKey(createId());
+      setConnection(null);
+
+      const client = new CopilotStudioClient(settings, accessToken);
+
+      const nuevaConexion = await CopilotStudioWebChat.createConnection(
+        client,
+        {
+          showTyping: true,
+        }
       );
+
+      liveConversationIdRef.current = newConversation.id;
+      activeConversationIdRef.current = newConversation.id;
+
+      setConnection(nuevaConexion);
+      setNecesitaLogin(false);
+      setModoHistorial(false);
+      setMensaje("");
     } catch (error) {
       console.error("Error conectando con Copilot Studio:", error);
       setMensaje("No se pudo conectar con Puerto Emplea.");
@@ -524,57 +444,47 @@ function Chat() {
       return;
     }
 
-    setCargando(true);
+    const newConversation = createAndActivateLocalConversation();
+
+    const newStore = createWebChatStore();
+
+    setStore(newStore);
+    setWebChatKey(createId());
+    setConnection(null);
+    setMensaje("Creando nueva conversación...");
 
     try {
-      const newConversation = createAndActivateLocalConversation();
+      const client = new CopilotStudioClient(settings, accessTokenActual);
 
-      await createCopilotConnectionForConversation(
-        newConversation.id,
-        accessTokenActual,
-        "Creando nueva conversación...",
-        false
+      const nuevaConexion = await CopilotStudioWebChat.createConnection(
+        client,
+        {
+          showTyping: true,
+        }
       );
+
+      liveConversationIdRef.current = newConversation.id;
+      activeConversationIdRef.current = newConversation.id;
+
+      setConnection(nuevaConexion);
+      setNecesitaLogin(false);
+      setModoHistorial(false);
+      setMensaje("");
     } catch (error) {
       console.error("Error creando nueva conversación:", error);
       setMensaje("No se pudo crear una nueva conversación.");
       setNecesitaLogin(false);
-    } finally {
-      setCargando(false);
     }
   };
 
-  const seleccionarConversacion = async (
-    conversationId: string
-  ): Promise<void> => {
+  const seleccionarConversacion = (conversationId: string): void => {
     setActiveConversationId(conversationId);
     activeConversationIdRef.current = conversationId;
 
-    if (!accessTokenActual || !usuario) {
-      setModoHistorial(true);
-      return;
-    }
-
-    if (conversationId === liveConversationIdRef.current && connection) {
+    if (conversationId === liveConversationIdRef.current) {
       setModoHistorial(false);
-      return;
-    }
-
-    setCargando(true);
-
-    try {
-      await createCopilotConnectionForConversation(
-        conversationId,
-        accessTokenActual,
-        "Abriendo conversación...",
-        true
-      );
-    } catch (error) {
-      console.error("Error abriendo conversación:", error);
+    } else {
       setModoHistorial(true);
-      setMensaje("No se pudo abrir la conversación para continuar.");
-    } finally {
-      setCargando(false);
     }
   };
 
