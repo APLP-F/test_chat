@@ -193,10 +193,19 @@ function Chat() {
     initialChatData.activeConversationId
   );
 
+  const [liveConversationId, setLiveConversationId] = useState<string | null>(
+    initialChatData.activeConversationId
+  );
+
   const [webChatKey, setWebChatKey] = useState(createId());
   const [modoHistorial, setModoHistorial] = useState(false);
 
   const estaEnIframe = window.self !== window.top;
+
+  function setLiveConversation(conversationId: string | null): void {
+    liveConversationIdRef.current = conversationId;
+    setLiveConversationId(conversationId);
+  }
 
   function createAndActivateLocalConversation(): SavedConversation {
     const newConversation = createEmptyConversation();
@@ -209,7 +218,7 @@ function Chat() {
 
     setActiveConversationId(newConversation.id);
     activeConversationIdRef.current = newConversation.id;
-    liveConversationIdRef.current = newConversation.id;
+    setLiveConversation(newConversation.id);
 
     setModoHistorial(false);
 
@@ -359,7 +368,7 @@ function Chat() {
         }
       );
 
-      liveConversationIdRef.current = newConversation.id;
+      setLiveConversation(newConversation.id);
       activeConversationIdRef.current = newConversation.id;
 
       setConnection(nuevaConexion);
@@ -463,7 +472,7 @@ function Chat() {
         }
       );
 
-      liveConversationIdRef.current = newConversation.id;
+      setLiveConversation(newConversation.id);
       activeConversationIdRef.current = newConversation.id;
 
       setConnection(nuevaConexion);
@@ -481,11 +490,18 @@ function Chat() {
     setActiveConversationId(conversationId);
     activeConversationIdRef.current = conversationId;
 
-    if (conversationId === liveConversationIdRef.current) {
+    if (conversationId === liveConversationIdRef.current && connection) {
       setModoHistorial(false);
-    } else {
-      setModoHistorial(true);
+      return;
     }
+
+    if (liveConversationIdRef.current && conversationId !== liveConversationIdRef.current) {
+      setLiveConversation(null);
+      setConnection(null);
+      setWebChatKey(createId());
+    }
+
+    setModoHistorial(true);
   };
 
   const eliminarConversacion = (conversationId: string): void => {
@@ -516,7 +532,7 @@ function Chat() {
       setActiveConversationId(newConversation.id);
 
       activeConversationIdRef.current = newConversation.id;
-      liveConversationIdRef.current = null;
+      setLiveConversation(null);
 
       setModoHistorial(true);
       setConnection(null);
@@ -529,8 +545,13 @@ function Chat() {
     setConversations(nextConversations);
 
     const deletedActiveConversation = conversationId === activeConversationId;
-    const deletedLiveConversation =
-      conversationId === liveConversationIdRef.current;
+    const deletedLiveConversation = conversationId === liveConversationIdRef.current;
+
+    if (deletedLiveConversation) {
+      setLiveConversation(null);
+      setConnection(null);
+      setWebChatKey(createId());
+    }
 
     if (!deletedActiveConversation) {
       return;
@@ -541,19 +562,7 @@ function Chat() {
     setActiveConversationId(nextActiveConversation.id);
     activeConversationIdRef.current = nextActiveConversation.id;
 
-    if (deletedLiveConversation) {
-      liveConversationIdRef.current = null;
-      setModoHistorial(true);
-      setConnection(null);
-      setWebChatKey(createId());
-      return;
-    }
-
-    if (nextActiveConversation.id === liveConversationIdRef.current) {
-      setModoHistorial(false);
-    } else {
-      setModoHistorial(true);
-    }
+    setModoHistorial(true);
   };
 
   useEffect(() => {
@@ -722,53 +731,84 @@ function Chat() {
         <div className="history-title">Conversaciones</div>
 
         <div className="conversation-list">
-          {conversations.map((conversation) => (
-            <div
-              key={conversation.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                marginBottom: "6px",
-              }}
-            >
-              <button
-                className={
-                  conversation.id === activeConversation?.id
-                    ? "history-item active"
-                    : "history-item"
-                }
-                style={{
-                  flex: 1,
-                  marginBottom: 0,
-                }}
-                onClick={() => seleccionarConversacion(conversation.id)}
-                title={conversation.title}
-              >
-                {conversation.title}
-              </button>
+          {conversations.map((conversation) => {
+            const isLiveConversation = conversation.id === liveConversationId;
+            const isSelectedConversation = conversation.id === activeConversation?.id;
 
-              <button
-                type="button"
-                title="Eliminar conversación"
-                onClick={() => eliminarConversacion(conversation.id)}
+            return (
+              <div
+                key={conversation.id}
                 style={{
-                  width: "34px",
-                  minWidth: "34px",
-                  height: "34px",
-                  border: "none",
-                  borderRadius: "8px",
-                  background: "#dc2626",
-                  color: "#ffffff",
-                  cursor: "pointer",
-                  fontWeight: "bold",
-                  flexShrink: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  marginBottom: "6px",
                 }}
               >
-                ×
-              </button>
-            </div>
-          ))}
+                <button
+                  className={
+                    isSelectedConversation ? "history-item active" : "history-item"
+                  }
+                  style={{
+                    flex: 1,
+                    marginBottom: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "8px",
+                  }}
+                  onClick={() => seleccionarConversacion(conversation.id)}
+                  title={conversation.title}
+                >
+                  <span
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {conversation.title}
+                  </span>
+
+                  {isLiveConversation && (
+                    <span
+                      style={{
+                        padding: "2px 6px",
+                        borderRadius: "999px",
+                        background: "#16a34a",
+                        color: "#ffffff",
+                        fontSize: "10px",
+                        fontWeight: 700,
+                        flexShrink: 0,
+                      }}
+                    >
+                      ACTIVA
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  title="Eliminar conversación"
+                  onClick={() => eliminarConversacion(conversation.id)}
+                  style={{
+                    width: "34px",
+                    minWidth: "34px",
+                    height: "34px",
+                    border: "none",
+                    borderRadius: "8px",
+                    background: "#dc2626",
+                    color: "#ffffff",
+                    cursor: "pointer",
+                    fontWeight: "bold",
+                    flexShrink: 0,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
         </div>
 
         <div className="user-info">{usuario}</div>
@@ -780,7 +820,22 @@ function Chat() {
             <div className="saved-history">
               <div className="saved-history-header">
                 <strong>{activeConversation?.title || "Conversación"}</strong>
-                <span>Historial guardado</span>
+                <span>Historial guardado · solo lectura</span>
+              </div>
+
+              <div
+                style={{
+                  marginBottom: "12px",
+                  padding: "10px 12px",
+                  borderRadius: "10px",
+                  background: "#eef6ff",
+                  color: "#0d3b66",
+                  fontSize: "13px",
+                  border: "1px solid #d7e8fb",
+                }}
+              >
+                Esta conversación está guardada como historial. Para continuar con
+                otra consulta, usa <strong>+ Nueva conversación</strong>.
               </div>
 
               <div className="saved-history-messages">
