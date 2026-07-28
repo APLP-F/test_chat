@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+ import { useEffect, useMemo, useRef, useState } from "react";
 import { PublicClientApplication } from "@azure/msal-browser";
 import type { AccountInfo } from "@azure/msal-browser";
 import { Components, createStore } from "botframework-webchat";
@@ -861,7 +861,14 @@ function Chat() {
 
   return (
     <div className="app-layout">
-      <aside className="sidebar">
+      <aside
+        className="sidebar"
+        style={{
+          width: "260px",
+          minWidth: "260px",
+          maxWidth: "260px",
+        }}
+      >
         <div className="brand">
           <img
             src={`${import.meta.env.BASE_URL}logo.png`}
@@ -970,7 +977,13 @@ function Chat() {
         <div className="user-info">{usuario}</div>
       </aside>
 
-      <main className="chat-area">
+      <main
+        className="chat-area"
+        style={{
+          flex: 1,
+          minWidth: 0,
+        }}
+      >
         <div className="chat-wrapper">
           {modoHistorial ? (
             <div className="saved-history">
@@ -1020,8 +1033,8 @@ function Chat() {
       {activeConversation?.messages?.length ? (
         <aside
           style={{
-            width: "390px",
-            minWidth: "390px",
+            width: "320px",
+            minWidth: "320px",
             height: "100%",
             borderLeft: "1px solid #e5edf5",
             background: "#f8fbff",
@@ -1032,7 +1045,7 @@ function Chat() {
         >
           <div
             style={{
-              padding: "16px",
+              padding: "12px",
               borderBottom: "1px solid #e5edf5",
               background: "#ffffff",
             }}
