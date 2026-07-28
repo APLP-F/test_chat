@@ -397,7 +397,10 @@ function Chat() {
     if (!Array.isArray(result?.conversaciones)) {
       return [];
     }
-
+    
+    console.log("USERNAME", username);
+    console.log("RESULTADO LISTAR", result);
+    
     return result.conversaciones
       .map(mapDataverseConversationToSavedConversation)
       .filter((conversation) => conversation.dataverseConversationRowId);
