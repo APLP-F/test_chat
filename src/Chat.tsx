@@ -27,15 +27,6 @@ let activeStorageKey = DEFAULT_STORAGE_KEY;
 const DATAVERSE_FLOW_URL = "https://6b8fc4584a99e825afb8ecbd16a97c.53.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/18/workflows/78ff7b170f4d4d3dbe0c175ba4a5568e/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=66ilhkEvJXjx1ZeSaBfNCgmGZDvmVqsFr_jK8Nh1hME";
 const DEFAULT_CONVERSATION_TITLE = "Conversación actual";
 
-function createUserStorageKey(username: string): string {
-  const safeUsername = username
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._@-]/g, "_");
-
-  return `puerto_emplea_chat_conversations_v1_${safeUsername || "anonimo"}`;
-}
-
 type ChatRole = "user" | "bot";
 
 interface DataverseConversation {
@@ -47,10 +38,17 @@ interface DataverseConversation {
   fechaCreacion?: string;
 }
 
+interface DataverseMessage {
+  rol?: string;
+  mensaje?: string;
+  fecha?: string;
+}
+
 interface DataverseFlowResponse {
   ok?: boolean;
   conversationRowId?: string;
   conversaciones?: DataverseConversation[];
+  mensajes?: DataverseMessage[];
   mensaje?: string;
   error?: string;
 }
@@ -70,6 +68,15 @@ interface SavedConversation {
   createdAt: string;
   updatedAt: string;
   messages: SavedMessage[];
+}
+
+function createUserStorageKey(username: string): string {
+  const safeUsername = username
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._@-]/g, "_");
+
+  return `puerto_emplea_chat_conversations_v1_${safeUsername || "anonimo"}`;
 }
 
 function createId(): string {
@@ -112,6 +119,16 @@ function getTitleFromFirstUserMessage(messages: SavedMessage[]): string {
   }
 
   return createConversationTitle(firstUserMessage.text);
+}
+
+function normalizeRoleFromDataverse(role?: string): ChatRole {
+  const normalizedRole = (role || "").trim().toLowerCase();
+
+  if (normalizedRole === "bot" || normalizedRole === "puerto emplea") {
+    return "bot";
+  }
+
+  return "user";
 }
 
 function normalizeConversation(
@@ -157,7 +174,6 @@ function createEmptyConversation(): SavedConversation {
   };
 }
 
-
 function mapDataverseConversationToSavedConversation(
   conversation: DataverseConversation
 ): SavedConversation {
@@ -178,11 +194,20 @@ function mapDataverseConversationToSavedConversation(
   };
 }
 
+function mapDataverseMessageToSavedMessage(message: DataverseMessage): SavedMessage {
+  return {
+    id: createId(),
+    role: normalizeRoleFromDataverse(message.rol),
+    text: message.mensaje || "",
+    createdAt: message.fecha || new Date().toISOString(),
+  };
+}
+
 function isPuertoEmpleaGreeting(text: string): boolean {
   const normalizedText = text
     .trim()
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 
   return (
@@ -325,13 +350,14 @@ function Chat() {
   const [, setResumedConversationId] = useState<string | null>(null);
 
   const estaEnIframe = window.self !== window.top;
+
   async function callDataverseFlow(
     payload: Record<string, unknown>
   ): Promise<DataverseFlowResponse | undefined> {
-    if (!DATAVERSE_FLOW_URL) {
-  console.warn("DATAVERSE_FLOW_URL todavía no está configurada.");
-  return undefined;
-}
+    if (!DATAVERSE_FLOW_URL || DATAVERSE_FLOW_URL === "https://6b8fc4584a99e825afb8ecbd16a97c.53.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/18/workflows/78ff7b170f4d4d3dbe0c175ba4a5568e/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=66ilhkEvJXjx1ZeSaBfNCgmGZDvmVqsFr_jK8Nh1hME") {
+      console.warn("DATAVERSE_FLOW_URL todavía no está configurada.");
+      return undefined;
+    }
 
     try {
       const response = await fetch(DATAVERSE_FLOW_URL, {
@@ -375,6 +401,58 @@ function Chat() {
     return result.conversaciones
       .map(mapDataverseConversationToSavedConversation)
       .filter((conversation) => conversation.dataverseConversationRowId);
+  }
+
+  async function cargarMensajesDesdeDataverse(
+    conversation: SavedConversation
+  ): Promise<SavedMessage[]> {
+    if (!conversation.dataverseConversationRowId) {
+      return conversation.messages;
+    }
+
+    const result = await callDataverseFlow({
+      accion: "obtenerMensajes",
+      conversationRowId: conversation.dataverseConversationRowId,
+      usuarioEmail: usuarioRef.current,
+    });
+
+    if (!Array.isArray(result?.mensajes)) {
+      return conversation.messages;
+    }
+
+    return result.mensajes
+      .map(mapDataverseMessageToSavedMessage)
+      .filter((message) => message.text.trim());
+  }
+
+  function replaceConversations(next: SavedConversation[]): void {
+    conversationsRef.current = next;
+    saveStoredConversations(next);
+    setConversations(next);
+  }
+
+  function updateConversationMessages(
+    localConversationId: string,
+    messages: SavedMessage[]
+  ): void {
+    setConversations((previous) => {
+      const next = previous.map((conversation) => {
+        if (conversation.id !== localConversationId) {
+          return conversation;
+        }
+
+        return {
+          ...conversation,
+          messages,
+          updatedAt: messages[messages.length - 1]?.createdAt || conversation.updatedAt,
+        };
+      });
+
+      conversationsRef.current = next;
+      saveStoredConversations(next);
+
+      return next;
+    });
   }
 
   function updateDataverseConversationRowId(
@@ -435,7 +513,6 @@ function Chat() {
       updateDataverseConversationRowId(conversation.id, result.conversationRowId);
     }
   }
-
 
   async function registrarMensajeEnDataverse(
     localConversationId: string,
@@ -692,7 +769,7 @@ function Chat() {
     loadingMessage: string,
     shouldResumeExistingConversation: boolean
   ): Promise<void> {
-    const conversationToOpen = conversations.find(
+    const conversationToOpen = conversationsRef.current.find(
       (conversation) => conversation.id === localConversationId
     );
 
@@ -762,9 +839,7 @@ function Chat() {
       const newConversation = createEmptyConversation();
       const nextConversations = [newConversation, ...storedUserConversations];
 
-      conversationsRef.current = nextConversations;
-      saveStoredConversations(nextConversations);
-      setConversations(nextConversations);
+      replaceConversations(nextConversations);
       setActiveConversationId(newConversation.id);
       activeConversationIdRef.current = newConversation.id;
       setLiveConversation(newConversation.id);
@@ -853,9 +928,8 @@ function Chat() {
     }
   };
 
-
   const crearNuevaConversacion = async (): Promise<void> => {
-    if (!accessTokenActual || !usuario) {
+    if (!accessTokenActual || !usuarioRef.current) {
       setMensaje("Inicia sesión para crear una nueva conversación.");
       setNecesitaLogin(true);
       return;
@@ -866,7 +940,10 @@ function Chat() {
     try {
       const newConversation = createAndActivateLocalConversation();
 
-      await registrarConversacionEnDataverse(newConversation, usuario);
+      await registrarConversacionEnDataverse(
+        newConversation,
+        usuarioRef.current
+      );
 
       await createCopilotConnectionForConversation(
         newConversation.id,
@@ -896,11 +973,32 @@ function Chat() {
       return;
     }
 
-    const selectedConversation = conversations.find(
+    const selectedConversation = conversationsRef.current.find(
       (conversation) => conversation.id === conversationId
     );
 
     let selectedConversationWithMessages = selectedConversation;
+
+    if (selectedConversation?.dataverseConversationRowId) {
+      setCargando(true);
+
+      try {
+        const dataverseMessages = await cargarMensajesDesdeDataverse(
+          selectedConversation
+        );
+
+        updateConversationMessages(selectedConversation.id, dataverseMessages);
+
+        selectedConversationWithMessages = {
+          ...selectedConversation,
+          messages: dataverseMessages,
+        };
+      } catch (error) {
+        console.error("Error cargando mensajes desde Dataverse:", error);
+      } finally {
+        setCargando(false);
+      }
+    }
 
     if (!selectedConversationWithMessages?.copilotConversationId) {
       if (liveConversationIdRef.current && conversationId !== liveConversationIdRef.current) {
@@ -914,7 +1012,7 @@ function Chat() {
       return;
     }
 
-    if (!accessTokenActual || !usuario) {
+    if (!accessTokenActual || !usuarioRef.current) {
       setModoHistorial(true);
       return;
     }
@@ -962,10 +1060,7 @@ function Chat() {
     if (nextConversations.length === 0) {
       const newConversation = createEmptyConversation();
 
-      conversationsRef.current = [newConversation];
-      saveStoredConversations([newConversation]);
-
-      setConversations([newConversation]);
+      replaceConversations([newConversation]);
       setActiveConversationId(newConversation.id);
 
       activeConversationIdRef.current = newConversation.id;
@@ -979,9 +1074,7 @@ function Chat() {
       return;
     }
 
-    conversationsRef.current = nextConversations;
-    saveStoredConversations(nextConversations);
-    setConversations(nextConversations);
+    replaceConversations(nextConversations);
 
     const deletedActiveConversation = conversationId === activeConversationId;
     const deletedLiveConversation = conversationId === liveConversationIdRef.current;
@@ -1025,10 +1118,10 @@ function Chat() {
           return;
         }
 
-        await conectarConToken(
-          data.username || "Usuario autenticado",
-          data.accessToken
-        );
+        const username = data.username || "Usuario autenticado";
+        usuarioRef.current = username;
+
+        await conectarConToken(username, data.accessToken);
 
         return;
       }
@@ -1063,6 +1156,7 @@ function Chat() {
           const redirectResult = await msalInstance.handleRedirectPromise();
 
           if (redirectResult?.account && redirectResult.accessToken) {
+            usuarioRef.current = redirectResult.account.username;
             await conectarConToken(
               redirectResult.account.username,
               redirectResult.accessToken
@@ -1072,6 +1166,7 @@ function Chat() {
           }
 
           if (redirectResult?.account) {
+            usuarioRef.current = redirectResult.account.username;
             await conectarConCuenta(redirectResult.account);
             setMsalListo(true);
             return;
@@ -1088,6 +1183,7 @@ function Chat() {
           return;
         }
 
+        usuarioRef.current = cuentas[0].username;
         await conectarConCuenta(cuentas[0]);
       } catch (error) {
         console.error("Error inicializando MSAL:", error);
@@ -1386,20 +1482,20 @@ function Chat() {
                   cargando ||
                   !activeConversation?.copilotConversationId ||
                   !accessTokenActual ||
-                  !usuario
+                  !usuarioRef.current
                 }
                 style={{
                   width: "100%",
                   border: "none",
                   borderRadius: "10px",
                   background:
-                    activeConversation?.copilotConversationId && accessTokenActual && usuario
+                    activeConversation?.copilotConversationId && accessTokenActual && usuarioRef.current
                       ? "#0d3b66"
                       : "#9ca3af",
                   color: "#ffffff",
                   padding: "10px 12px",
                   cursor:
-                    activeConversation?.copilotConversationId && accessTokenActual && usuario
+                    activeConversation?.copilotConversationId && accessTokenActual && usuarioRef.current
                       ? "pointer"
                       : "not-allowed",
                   fontWeight: 700,
@@ -1433,7 +1529,7 @@ function Chat() {
               flex: 1,
               minHeight: 0,
               overflowY: "auto",
-              padding: "14px",
+              padding: "12px",
               display: "flex",
               flexDirection: "column",
               gap: "10px",
