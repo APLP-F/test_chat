@@ -1,4 +1,4 @@
- import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PublicClientApplication } from "@azure/msal-browser";
 import type { AccountInfo } from "@azure/msal-browser";
 import { Components, createStore } from "botframework-webchat";
@@ -21,8 +21,19 @@ const { BasicWebChat, Composer } = Components;
 
 const msalInstance = new PublicClientApplication(msalConfig);
 
-const STORAGE_KEY = "puerto_emplea_chat_conversations_v1";
+const DEFAULT_STORAGE_KEY = "puerto_emplea_chat_conversations_v1";
+let activeStorageKey = DEFAULT_STORAGE_KEY;
+
 const DEFAULT_CONVERSATION_TITLE = "Conversación actual";
+
+function createUserStorageKey(username: string): string {
+  const safeUsername = username
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._@-]/g, "_");
+
+  return `puerto_emplea_chat_conversations_v1_${safeUsername || "anonimo"}`;
+}
 
 type ChatRole = "user" | "bot";
 
@@ -141,7 +152,7 @@ function isPuertoEmpleaGreeting(text: string): boolean {
 
 function loadStoredConversations(): SavedConversation[] {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(activeStorageKey);
 
     if (!raw) {
       return [];
@@ -166,7 +177,44 @@ function loadStoredConversations(): SavedConversation[] {
 }
 
 function saveStoredConversations(conversations: SavedConversation[]): void {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
+  window.localStorage.setItem(activeStorageKey, JSON.stringify(conversations));
+}
+
+function activateStorageForUser(username: string): SavedConversation[] {
+  activeStorageKey = createUserStorageKey(username);
+
+  const userConversations = loadStoredConversations();
+
+  if (userConversations.length > 0) {
+    return userConversations;
+  }
+
+  try {
+    const legacyRaw = window.localStorage.getItem(DEFAULT_STORAGE_KEY);
+
+    if (!legacyRaw) {
+      return [];
+    }
+
+    const legacyParsed = JSON.parse(legacyRaw) as unknown;
+
+    if (!Array.isArray(legacyParsed)) {
+      return [];
+    }
+
+    const legacyConversations = legacyParsed.map((conversation) =>
+      normalizeConversation(conversation as Partial<SavedConversation>)
+    );
+
+    if (legacyConversations.length > 0) {
+      saveStoredConversations(legacyConversations);
+      window.localStorage.removeItem(DEFAULT_STORAGE_KEY);
+    }
+
+    return legacyConversations;
+  } catch {
+    return [];
+  }
 }
 
 function getInitialChatData(): {
@@ -486,7 +534,17 @@ function Chat() {
       setAccessTokenActual(accessToken);
       setMensaje("Conectando con Puerto Emplea...");
 
-      const newConversation = createAndActivateLocalConversation();
+      const storedUserConversations = activateStorageForUser(username);
+      const newConversation = createEmptyConversation();
+      const nextConversations = [newConversation, ...storedUserConversations];
+
+      saveStoredConversations(nextConversations);
+      setConversations(nextConversations);
+      setActiveConversationId(newConversation.id);
+      activeConversationIdRef.current = newConversation.id;
+      setLiveConversation(newConversation.id);
+      setModoHistorial(false);
+      setResumedConversationId(null);
 
       await createCopilotConnectionForConversation(
         newConversation.id,
@@ -864,9 +922,9 @@ function Chat() {
       <aside
         className="sidebar"
         style={{
-          width: "260px",
-          minWidth: "260px",
-          maxWidth: "260px",
+          width: "220px",
+          minWidth: "220px",
+          maxWidth: "220px",
         }}
       >
         <div className="brand">
@@ -1033,8 +1091,8 @@ function Chat() {
       {activeConversation?.messages?.length ? (
         <aside
           style={{
-            width: "320px",
-            minWidth: "320px",
+            width: "280px",
+            minWidth: "280px",
             height: "100%",
             borderLeft: "1px solid #e5edf5",
             background: "#f8fbff",
