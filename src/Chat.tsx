@@ -38,9 +38,19 @@ function createUserStorageKey(username: string): string {
 
 type ChatRole = "user" | "bot";
 
+interface DataverseConversation {
+  conversationRowId?: string;
+  localConversationId?: string;
+  titulo?: string;
+  usuarioEmail?: string;
+  copilotConversationId?: string;
+  fechaCreacion?: string;
+}
+
 interface DataverseFlowResponse {
   ok?: boolean;
   conversationRowId?: string;
+  conversaciones?: DataverseConversation[];
   mensaje?: string;
   error?: string;
 }
@@ -147,6 +157,26 @@ function createEmptyConversation(): SavedConversation {
   };
 }
 
+
+function mapDataverseConversationToSavedConversation(
+  conversation: DataverseConversation
+): SavedConversation {
+  const now = new Date().toISOString();
+  const rowId = conversation.conversationRowId || createId();
+  const title = cleanConversationTitle(
+    conversation.titulo || DEFAULT_CONVERSATION_TITLE
+  );
+
+  return {
+    id: conversation.localConversationId || rowId,
+    dataverseConversationRowId: conversation.conversationRowId || rowId,
+    copilotConversationId: conversation.copilotConversationId || undefined,
+    title,
+    createdAt: conversation.fechaCreacion || now,
+    updatedAt: conversation.fechaCreacion || now,
+    messages: [],
+  };
+}
 
 function isPuertoEmpleaGreeting(text: string): boolean {
   const normalizedText = text
@@ -328,6 +358,23 @@ function Chat() {
       console.error("No se pudo llamar al flujo de Dataverse:", error);
       return undefined;
     }
+  }
+
+  async function cargarConversacionesDesdeDataverse(
+    username: string
+  ): Promise<SavedConversation[]> {
+    const result = await callDataverseFlow({
+      accion: "listarConversaciones",
+      usuarioEmail: username,
+    });
+
+    if (!Array.isArray(result?.conversaciones)) {
+      return [];
+    }
+
+    return result.conversaciones
+      .map(mapDataverseConversationToSavedConversation)
+      .filter((conversation) => conversation.dataverseConversationRowId);
   }
 
   function updateDataverseConversationRowId(
@@ -703,7 +750,15 @@ function Chat() {
       setAccessTokenActual(accessToken);
       setMensaje("Conectando con Puerto Emplea...");
 
-      const storedUserConversations = activateStorageForUser(username);
+      const localUserConversations = activateStorageForUser(username);
+      const dataverseUserConversations =
+        await cargarConversacionesDesdeDataverse(username);
+
+      const storedUserConversations =
+        dataverseUserConversations.length > 0
+          ? dataverseUserConversations
+          : localUserConversations;
+
       const newConversation = createEmptyConversation();
       const nextConversations = [newConversation, ...storedUserConversations];
 
