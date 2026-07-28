@@ -256,6 +256,7 @@ const initialChatData = getInitialChatData();
 function Chat() {
   const [connection, setConnection] = useState<any>(null);
   const [usuario, setUsuario] = useState("");
+  const usuarioRef = useRef("");
   const [mensaje, setMensaje] = useState("Preparando Puerto Emplea...");
   const [necesitaLogin, setNecesitaLogin] = useState(false);
   const [cargando, setCargando] = useState(false);
@@ -421,8 +422,8 @@ function Chat() {
       accion: "guardarMensaje",
       localConversationId,
       titulo: conversation.title,
-      usuario,
-      usuarioEmail: usuario,
+      usuario: usuarioRef.current,
+      usuarioEmail: usuarioRef.current,
       conversationRowId: conversation.dataverseConversationRowId,
       copilotConversationId:
         copilotConversationId || conversation.copilotConversationId || "",
@@ -698,6 +699,7 @@ function Chat() {
 
     try {
       setUsuario(username);
+      usuarioRef.current = username;
       setAccessTokenActual(accessToken);
       setMensaje("Conectando con Puerto Emplea...");
 
@@ -738,6 +740,7 @@ function Chat() {
 
     try {
       setUsuario(cuenta.username);
+      usuarioRef.current = cuenta.username;
       setMensaje("Obteniendo permisos para Copilot Studio...");
 
       const tokenResult = await msalInstance.acquireTokenSilent({
