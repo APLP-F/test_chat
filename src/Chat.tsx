@@ -293,13 +293,10 @@ function Chat() {
   async function callDataverseFlow(
     payload: Record<string, unknown>
   ): Promise<DataverseFlowResponse | undefined> {
-    if (
-      !DATAVERSE_FLOW_URL ||
-      DATAVERSE_FLOW_URL === "https://6b8fc4584a99e825afb8ecbd16a97c.53.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/18/workflows/78ff7b170f4d4d3dbe0c175ba4a5568e/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=66ilhkEvJXjx1ZeSaBfNCgmGZDvmVqsFr_jK8Nh1hME"
-    ) {
-      console.warn("DATAVERSE_FLOW_URL todavía no está configurada.");
-      return undefined;
-    }
+    if (!DATAVERSE_FLOW_URL) {
+  console.warn("DATAVERSE_FLOW_URL todavía no está configurada.");
+  return undefined;
+}
 
     try {
       const response = await fetch(DATAVERSE_FLOW_URL, {
