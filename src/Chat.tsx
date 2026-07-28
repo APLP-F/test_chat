@@ -47,10 +47,17 @@ interface DataverseConversation {
   fechaCreacion?: string;
 }
 
+interface DataverseMessage {
+  rol?: string;
+  mensaje?: string;
+  fecha?: string;
+}
+
 interface DataverseFlowResponse {
   ok?: boolean;
   conversationRowId?: string;
   conversaciones?: DataverseConversation[];
+  mensajes?: DataverseMessage[];
   mensaje?: string;
   error?: string;
 }
@@ -175,6 +182,25 @@ function mapDataverseConversationToSavedConversation(
     createdAt: conversation.fechaCreacion || now,
     updatedAt: conversation.fechaCreacion || now,
     messages: [],
+  };
+}
+
+function normalizeRoleFromDataverse(role?: string): ChatRole {
+  const normalizedRole = (role || "").trim().toLowerCase();
+
+  if (normalizedRole === "bot" || normalizedRole === "puerto emplea") {
+    return "bot";
+  }
+
+  return "user";
+}
+
+function mapDataverseMessageToSavedMessage(message: DataverseMessage): SavedMessage {
+  return {
+    id: createId(),
+    role: normalizeRoleFromDataverse(message.rol),
+    text: message.mensaje || "",
+    createdAt: message.fecha || new Date().toISOString(),
   };
 }
 
@@ -375,6 +401,52 @@ function Chat() {
     return result.conversaciones
       .map(mapDataverseConversationToSavedConversation)
       .filter((conversation) => conversation.dataverseConversationRowId);
+  }
+
+  async function cargarMensajesDesdeDataverse(
+    conversation: SavedConversation
+  ): Promise<SavedMessage[]> {
+    if (!conversation.dataverseConversationRowId) {
+      return conversation.messages;
+    }
+
+    const result = await callDataverseFlow({
+      accion: "obtenerMensajes",
+      conversationRowId: conversation.dataverseConversationRowId,
+      usuarioEmail: usuarioRef.current,
+    });
+
+    if (!Array.isArray(result?.mensajes)) {
+      return conversation.messages;
+    }
+
+    return result.mensajes
+      .map(mapDataverseMessageToSavedMessage)
+      .filter((message) => message.text.trim());
+  }
+
+  function updateConversationMessages(
+    localConversationId: string,
+    messages: SavedMessage[]
+  ): void {
+    setConversations((previous) => {
+      const next = previous.map((conversation) => {
+        if (conversation.id !== localConversationId) {
+          return conversation;
+        }
+
+        return {
+          ...conversation,
+          messages,
+          updatedAt: messages[messages.length - 1]?.createdAt || conversation.updatedAt,
+        };
+      });
+
+      conversationsRef.current = next;
+      saveStoredConversations(next);
+
+      return next;
+    });
   }
 
   function updateDataverseConversationRowId(
@@ -692,7 +764,7 @@ function Chat() {
     loadingMessage: string,
     shouldResumeExistingConversation: boolean
   ): Promise<void> {
-    const conversationToOpen = conversations.find(
+    const conversationToOpen = conversationsRef.current.find(
       (conversation) => conversation.id === localConversationId
     );
 
@@ -896,11 +968,34 @@ function Chat() {
       return;
     }
 
-    const selectedConversation = conversations.find(
+    const selectedConversation = conversationsRef.current.find(
       (conversation) => conversation.id === conversationId
     );
 
-    if (!selectedConversation?.copilotConversationId) {
+    let selectedConversationWithMessages = selectedConversation;
+
+    if (selectedConversation?.dataverseConversationRowId) {
+      setCargando(true);
+
+      try {
+        const dataverseMessages = await cargarMensajesDesdeDataverse(
+          selectedConversation
+        );
+
+        updateConversationMessages(selectedConversation.id, dataverseMessages);
+
+        selectedConversationWithMessages = {
+          ...selectedConversation,
+          messages: dataverseMessages,
+        };
+      } catch (error) {
+        console.error("Error cargando mensajes desde Dataverse:", error);
+      } finally {
+        setCargando(false);
+      }
+    }
+
+    if (!selectedConversationWithMessages?.copilotConversationId) {
       if (liveConversationIdRef.current && conversationId !== liveConversationIdRef.current) {
         setLiveConversation(null);
         setConnection(null);
@@ -912,7 +1007,7 @@ function Chat() {
       return;
     }
 
-    if (!accessTokenActual || !usuario) {
+    if (!accessTokenActual || !usuarioRef.current) {
       setModoHistorial(true);
       return;
     }
