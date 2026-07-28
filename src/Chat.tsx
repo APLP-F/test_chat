@@ -24,6 +24,7 @@ const msalInstance = new PublicClientApplication(msalConfig);
 const DEFAULT_STORAGE_KEY = "puerto_emplea_chat_conversations_v1";
 let activeStorageKey = DEFAULT_STORAGE_KEY;
 
+const DATAVERSE_FLOW_URL = "https://6b8fc4584a99e825afb8ecbd16a97c.53.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/18/workflows/78ff7b170f4d4d3dbe0c175ba4a5568e/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=66ilhkEvJXjx1ZeSaBfNCgmGZDvmVqsFr_jK8Nh1hME";
 const DEFAULT_CONVERSATION_TITLE = "Conversación actual";
 
 function createUserStorageKey(username: string): string {
@@ -37,6 +38,13 @@ function createUserStorageKey(username: string): string {
 
 type ChatRole = "user" | "bot";
 
+interface DataverseFlowResponse {
+  ok?: boolean;
+  conversationRowId?: string;
+  mensaje?: string;
+  error?: string;
+}
+
 interface SavedMessage {
   id: string;
   role: ChatRole;
@@ -46,6 +54,7 @@ interface SavedMessage {
 
 interface SavedConversation {
   id: string;
+  dataverseConversationRowId?: string;
   copilotConversationId?: string;
   title: string;
   createdAt: string;
@@ -115,6 +124,7 @@ function normalizeConversation(
 
   return {
     id: conversation.id || createId(),
+    dataverseConversationRowId: conversation.dataverseConversationRowId,
     copilotConversationId: conversation.copilotConversationId,
     title: normalizedTitle,
     createdAt: conversation.createdAt || now,
@@ -128,6 +138,7 @@ function createEmptyConversation(): SavedConversation {
 
   return {
     id: createId(),
+    dataverseConversationRowId: undefined,
     copilotConversationId: undefined,
     title: DEFAULT_CONVERSATION_TITLE,
     createdAt: now,
@@ -279,6 +290,102 @@ function Chat() {
   const [, setResumedConversationId] = useState<string | null>(null);
 
   const estaEnIframe = window.self !== window.top;
+  async function callDataverseFlow(
+    payload: Record<string, unknown>
+  ): Promise<DataverseFlowResponse | undefined> {
+    if (
+      !DATAVERSE_FLOW_URL ||
+      DATAVERSE_FLOW_URL === "https://6b8fc4584a99e825afb8ecbd16a97c.53.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/18/workflows/78ff7b170f4d4d3dbe0c175ba4a5568e/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=66ilhkEvJXjx1ZeSaBfNCgmGZDvmVqsFr_jK8Nh1hME"
+    ) {
+      console.warn("DATAVERSE_FLOW_URL todavía no está configurada.");
+      return undefined;
+    }
+
+    try {
+      const response = await fetch(DATAVERSE_FLOW_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const responseText = await response.text();
+
+      if (!response.ok) {
+        console.error("Error desde Power Automate:", response.status, responseText);
+        return undefined;
+      }
+
+      if (!responseText) {
+        return { ok: true };
+      }
+
+      return JSON.parse(responseText) as DataverseFlowResponse;
+    } catch (error) {
+      console.error("No se pudo llamar al flujo de Dataverse:", error);
+      return undefined;
+    }
+  }
+
+  function updateDataverseConversationRowId(
+    localConversationId: string,
+    dataverseConversationRowId?: string
+  ): void {
+    if (!dataverseConversationRowId) {
+      return;
+    }
+
+    setConversations((previous) => {
+      let changed = false;
+
+      const next = previous.map((conversation) => {
+        if (conversation.id !== localConversationId) {
+          return conversation;
+        }
+
+        if (conversation.dataverseConversationRowId === dataverseConversationRowId) {
+          return conversation;
+        }
+
+        changed = true;
+
+        return {
+          ...conversation,
+          dataverseConversationRowId,
+        };
+      });
+
+      if (changed) {
+        saveStoredConversations(next);
+      }
+
+      return next;
+    });
+  }
+
+  async function registrarConversacionEnDataverse(
+    conversation: SavedConversation,
+    username: string,
+    copilotConversationId?: string
+  ): Promise<void> {
+    const result = await callDataverseFlow({
+      accion: "crearConversacion",
+      localConversationId: conversation.id,
+      titulo: conversation.title,
+      usuario: username,
+      usuarioEmail: username,
+      conversationRowId: "",
+      copilotConversationId: copilotConversationId || conversation.copilotConversationId || "",
+      rol: "",
+      mensaje: "",
+    });
+
+    if (result?.conversationRowId) {
+      updateDataverseConversationRowId(conversation.id, result.conversationRowId);
+    }
+  }
+
 
   function updateCopilotConversationId(
     localConversationId: string,
@@ -546,6 +653,8 @@ function Chat() {
       setModoHistorial(false);
       setResumedConversationId(null);
 
+      await registrarConversacionEnDataverse(newConversation, username);
+
       await createCopilotConnectionForConversation(
         newConversation.id,
         accessToken,
@@ -637,6 +746,8 @@ function Chat() {
 
     try {
       const newConversation = createAndActivateLocalConversation();
+
+      await registrarConversacionEnDataverse(newConversation, usuario);
 
       await createCopilotConnectionForConversation(
         newConversation.id,
