@@ -267,6 +267,10 @@ function Chat() {
     initialChatData.conversations
   );
 
+  const conversationsRef = useRef<SavedConversation[]>(
+    initialChatData.conversations
+  );
+
   const [activeConversationId, setActiveConversationId] = useState(
     initialChatData.activeConversationId
   );
@@ -354,6 +358,7 @@ function Chat() {
       });
 
       if (changed) {
+        conversationsRef.current = next;
         saveStoredConversations(next);
       }
 
@@ -384,6 +389,48 @@ function Chat() {
   }
 
 
+  async function registrarMensajeEnDataverse(
+    localConversationId: string,
+    role: ChatRole,
+    text: string,
+    copilotConversationId?: string
+  ): Promise<void> {
+    const cleanText = text?.trim();
+
+    if (!cleanText) {
+      return;
+    }
+
+    const conversation = conversationsRef.current.find(
+      (currentConversation) => currentConversation.id === localConversationId
+    );
+
+    if (!conversation?.dataverseConversationRowId) {
+      console.warn(
+        "No se pudo guardar el mensaje en Dataverse porque la conversación no tiene GUID de Dataverse.",
+        {
+          localConversationId,
+          role,
+          cleanText,
+        }
+      );
+      return;
+    }
+
+    await callDataverseFlow({
+      accion: "guardarMensaje",
+      localConversationId,
+      titulo: conversation.title,
+      usuario,
+      usuarioEmail: usuario,
+      conversationRowId: conversation.dataverseConversationRowId,
+      copilotConversationId:
+        copilotConversationId || conversation.copilotConversationId || "",
+      rol: role,
+      mensaje: cleanText,
+    });
+  }
+
   function updateCopilotConversationId(
     localConversationId: string,
     copilotConversationId?: string
@@ -413,6 +460,7 @@ function Chat() {
       });
 
       if (changed) {
+        conversationsRef.current = next;
         saveStoredConversations(next);
       }
 
@@ -430,6 +478,7 @@ function Chat() {
 
     setConversations((previous) => {
       const next = [newConversation, ...previous];
+      conversationsRef.current = next;
       saveStoredConversations(next);
       return next;
     });
@@ -489,6 +538,7 @@ function Chat() {
         };
       });
 
+      conversationsRef.current = next;
       saveStoredConversations(next);
 
       return next;
@@ -530,6 +580,13 @@ function Chat() {
             activity.text
           );
 
+          void registrarMensajeEnDataverse(
+            currentLiveConversationId,
+            "bot",
+            activity.text,
+            realCopilotConversationId
+          );
+
           window.parent.postMessage(
             {
               type: "BOT_RESPONSE",
@@ -546,6 +603,12 @@ function Chat() {
 
         if (currentLiveConversationId) {
           appendMessageToConversation(
+            currentLiveConversationId,
+            "user",
+            userText
+          );
+
+          void registrarMensajeEnDataverse(
             currentLiveConversationId,
             "user",
             userText
@@ -642,6 +705,7 @@ function Chat() {
       const newConversation = createEmptyConversation();
       const nextConversations = [newConversation, ...storedUserConversations];
 
+      conversationsRef.current = nextConversations;
       saveStoredConversations(nextConversations);
       setConversations(nextConversations);
       setActiveConversationId(newConversation.id);
@@ -838,6 +902,7 @@ function Chat() {
     if (nextConversations.length === 0) {
       const newConversation = createEmptyConversation();
 
+      conversationsRef.current = [newConversation];
       saveStoredConversations([newConversation]);
 
       setConversations([newConversation]);
@@ -854,6 +919,7 @@ function Chat() {
       return;
     }
 
+    conversationsRef.current = nextConversations;
     saveStoredConversations(nextConversations);
     setConversations(nextConversations);
 
