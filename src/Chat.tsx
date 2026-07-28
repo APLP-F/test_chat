@@ -842,7 +842,9 @@ function Chat() {
       (conversation) => conversation.id === conversationId
     );
 
-    if (!selectedConversation?.copilotConversationId) {
+    let selectedConversationWithMessages = selectedConversation;
+
+    if (!selectedConversationWithMessages?.copilotConversationId) {
       if (liveConversationIdRef.current && conversationId !== liveConversationIdRef.current) {
         setLiveConversation(null);
         setConnection(null);
