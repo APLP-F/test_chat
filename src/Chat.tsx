@@ -1033,8 +1033,10 @@ function Chat() {
     }
   };
 
-  const eliminarConversacion = (conversationId: string): void => {
-    const conversationToDelete = conversations.find(
+  const eliminarConversacion = async (
+    conversationId: string
+  ): Promise<void> => {
+    const conversationToDelete = conversationsRef.current.find(
       (conversation) => conversation.id === conversationId
     );
 
@@ -1048,54 +1050,85 @@ function Chat() {
       return;
     }
 
-    const nextConversations = conversations.filter(
-      (conversation) => conversation.id !== conversationId
-    );
+    setCargando(true);
 
-    if (nextConversations.length === 0) {
-      const newConversation = createEmptyConversation();
+    try {
+      if (conversationToDelete?.dataverseConversationRowId) {
+        const deleteResult = await callDataverseFlow({
+          accion: "eliminarConversacion",
+          conversationRowId: conversationToDelete.dataverseConversationRowId,
+          usuarioEmail: usuarioRef.current,
+        });
 
-      conversationsRef.current = [newConversation];
-      saveStoredConversations([newConversation]);
+        if (!deleteResult?.ok) {
+          console.error(
+            "No se pudo eliminar la conversación en Dataverse.",
+            deleteResult
+          );
+          window.alert(
+            "No se pudo eliminar la conversación en Dataverse. Revisa la ejecución del flujo y vuelve a intentarlo."
+          );
+          return;
+        }
+      }
 
-      setConversations([newConversation]);
-      setActiveConversationId(newConversation.id);
+      const nextConversations = conversationsRef.current.filter(
+        (conversation) => conversation.id !== conversationId
+      );
 
-      activeConversationIdRef.current = newConversation.id;
-      setLiveConversation(null);
-      setResumedConversationId(null);
+      if (nextConversations.length === 0) {
+        const newConversation = createEmptyConversation();
+
+        conversationsRef.current = [newConversation];
+        saveStoredConversations([newConversation]);
+
+        setConversations([newConversation]);
+        setActiveConversationId(newConversation.id);
+
+        activeConversationIdRef.current = newConversation.id;
+        setLiveConversation(null);
+        setResumedConversationId(null);
+
+        setModoHistorial(true);
+        setConnection(null);
+        setWebChatKey(createId());
+
+        return;
+      }
+
+      conversationsRef.current = nextConversations;
+      saveStoredConversations(nextConversations);
+      setConversations(nextConversations);
+
+      const deletedActiveConversation = conversationId === activeConversationId;
+      const deletedLiveConversation =
+        conversationId === liveConversationIdRef.current;
+
+      if (deletedLiveConversation) {
+        setLiveConversation(null);
+        setResumedConversationId(null);
+        setConnection(null);
+        setWebChatKey(createId());
+      }
+
+      if (!deletedActiveConversation) {
+        return;
+      }
+
+      const nextActiveConversation = nextConversations[0];
+
+      setActiveConversationId(nextActiveConversation.id);
+      activeConversationIdRef.current = nextActiveConversation.id;
 
       setModoHistorial(true);
-      setConnection(null);
-      setWebChatKey(createId());
-
-      return;
+    } catch (error) {
+      console.error("Error eliminando la conversación:", error);
+      window.alert(
+        "No se pudo eliminar la conversación. Revisa la ejecución del flujo y vuelve a intentarlo."
+      );
+    } finally {
+      setCargando(false);
     }
-
-    conversationsRef.current = nextConversations;
-    saveStoredConversations(nextConversations);
-    setConversations(nextConversations);
-
-    const deletedActiveConversation = conversationId === activeConversationId;
-    const deletedLiveConversation = conversationId === liveConversationIdRef.current;
-
-    if (deletedLiveConversation) {
-      setLiveConversation(null);
-      setResumedConversationId(null);
-      setConnection(null);
-      setWebChatKey(createId());
-    }
-
-    if (!deletedActiveConversation) {
-      return;
-    }
-
-    const nextActiveConversation = nextConversations[0];
-
-    setActiveConversationId(nextActiveConversation.id);
-    activeConversationIdRef.current = nextActiveConversation.id;
-
-    setModoHistorial(true);
   };
 
   useEffect(() => {
