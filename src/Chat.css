@@ -231,12 +231,20 @@ body {
   text-align: center;
 }
 /* =========================================================
-   Puerto Emplea - Paneles laterales y suggested actions
-   - Mantiene el ancho de los paneles.
-   - Los controles de desplegar quedan en sus esquinas.
-   - Los botones del agente conservan su ubicacion original.
+   Puerto Emplea - Sidebar colapsable tipo ChatGPT/Copilot
    ========================================================= */
-.sidebar-section-header,
+.sidebar,
+.history-sidebar {
+  transition: width 180ms ease, min-width 180ms ease, max-width 180ms ease;
+}
+
+.sidebar-collapsed,
+.history-sidebar-collapsed {
+  padding: 10px 8px !important;
+  align-items: center;
+}
+
+.sidebar-topbar,
 .history-panel-header {
   display: flex;
   align-items: center;
@@ -244,21 +252,64 @@ body {
   gap: 8px;
 }
 
-.sidebar-section-header {
-  margin-top: 24px;
-  margin-bottom: 10px;
+.compact-brand {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 14px;
+  text-align: left;
 }
 
-.sidebar-section-title {
-  font-size: 12px;
-  color: #888888;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 700;
+.compact-brand .logo {
+  width: 135px;
+  max-width: 100%;
+  margin: 0 0 8px 0;
 }
 
-.history-panel-header {
-  margin-bottom: 6px;
+.sidebar-collapse-btn,
+.sidebar-rail-btn {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  border: 1px solid #d8e2ec;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #0d3b66;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 1px 3px rgba(13, 59, 102, 0.06);
+}
+
+.sidebar-collapse-btn:hover,
+.sidebar-rail-btn:hover {
+  background: #f3f8ff;
+  border-color: #0d3b66;
+}
+
+.sidebar-rail,
+.history-rail {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.sidebar-rail-brand {
+  margin-bottom: 8px;
+}
+
+.sidebar-collapsed .user-info,
+.sidebar-collapsed .brand,
+.sidebar-collapsed .new-chat-btn,
+.sidebar-collapsed .history-title,
+.sidebar-collapsed .conversation-list {
+  display: none !important;
 }
 
 .history-panel-title {
@@ -268,46 +319,15 @@ body {
   line-height: 1.2;
 }
 
-.panel-corner-toggle {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  border: 1px solid #c7d7e8;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #0d3b66;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 15px;
-  font-weight: 900;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0;
+.history-sidebar-collapsed {
+  justify-content: flex-start;
 }
 
-.panel-corner-toggle:hover {
-  background: #f3f8ff;
-  border-color: #0d3b66;
+.history-sidebar-collapsed .history-rail {
+  padding-top: 12px;
 }
 
-.conversation-list-collapsed,
-.history-panel-collapsed {
-  border: 1px dashed #c7d7e8;
-  background: #f8fbff;
-  color: #58708a;
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-.history-panel-collapsed {
-  margin: 14px;
-  text-align: center;
-}
-
-/* Mantener el layout estable: los paneles conservan ancho y el chat central ocupa el resto */
+/* Mantener el chat central ocupando todo el espacio disponible */
 .chat-area {
   display: flex;
   flex-direction: column;
@@ -318,8 +338,7 @@ body {
   min-height: 0;
 }
 
-/* Botones sugeridos generados por el agente.
-   Solo cambia su apariencia: no cambia ubicacion ni funcionamiento. */
+/* Botones sugeridos generados por el agente: no cambia ubicacion ni funcionamiento */
 .chat-wrapper [class*="suggested"] button,
 .chat-wrapper [class*="suggested"] [role="button"],
 .webchat__suggested-action,
@@ -358,7 +377,6 @@ body {
   padding-bottom: 4px !important;
 }
 
-/* Flechas del carrusel de suggested actions, cuando aparecen */
 .chat-wrapper [class*="suggested"] button[aria-label],
 .webchat__suggested-actions button[aria-label] {
   border-radius: 999px !important;

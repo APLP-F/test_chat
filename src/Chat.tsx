@@ -348,8 +348,8 @@ function Chat() {
 
   const [webChatKey, setWebChatKey] = useState(createId());
   const [modoHistorial, setModoHistorial] = useState(false);
-  const [conversacionesDesplegadas, setConversacionesDesplegadas] = useState(true);
-  const [historialDesplegado, setHistorialDesplegado] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [historyCollapsed, setHistoryCollapsed] = useState(false);
   const [, setResumedConversationId] = useState<string | null>(null);
 
   const estaEnIframe = window.self !== window.top;
@@ -1288,136 +1288,162 @@ function Chat() {
   return (
     <div className="app-layout">
       <aside
-        className="sidebar"
+        className={sidebarCollapsed ? "sidebar sidebar-collapsed" : "sidebar"}
         style={{
-          width: "220px",
-          minWidth: "220px",
-          maxWidth: "220px",
+          width: sidebarCollapsed ? "64px" : "220px",
+          minWidth: sidebarCollapsed ? "64px" : "220px",
+          maxWidth: sidebarCollapsed ? "64px" : "220px",
         }}
       >
-        <div className="brand">
-          <img
-            src={`${import.meta.env.BASE_URL}logo.png`}
-            alt="Puerto Emplea"
-            className="logo"
-          />
+        {sidebarCollapsed ? (
+          <div className="sidebar-rail">
+            <button
+              type="button"
+              className="sidebar-rail-btn sidebar-rail-brand"
+              onClick={() => setSidebarCollapsed(false)}
+              title="Expandir panel"
+            >
+              ☰
+            </button>
 
-          <div className="brand-subtitle">Asistente IA</div>
-        </div>
+            <button
+              type="button"
+              className="sidebar-rail-btn"
+              onClick={crearNuevaConversacion}
+              title="Nueva conversación"
+            >
+              ＋
+            </button>
 
-        <button className="new-chat-btn" onClick={crearNuevaConversacion}>
-          + Nueva conversación
-        </button>
+            <button
+              type="button"
+              className="sidebar-rail-btn"
+              onClick={() => setSidebarCollapsed(false)}
+              title="Conversaciones"
+            >
+              💬
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="sidebar-topbar">
+              <div className="brand compact-brand">
+                <img
+                  src={`${import.meta.env.BASE_URL}logo.png`}
+                  alt="Puerto Emplea"
+                  className="logo"
+                />
+                <div className="brand-subtitle">Asistente IA</div>
+              </div>
 
-        <div className="sidebar-section-header">
-          <span className="sidebar-section-title">Conversaciones</span>
-          <button
-            type="button"
-            className="panel-corner-toggle"
-            onClick={() => setConversacionesDesplegadas((visible) => !visible)}
-            aria-expanded={conversacionesDesplegadas}
-            title={conversacionesDesplegadas ? "Ocultar conversaciones" : "Mostrar conversaciones"}
-          >
-            {conversacionesDesplegadas ? "−" : "+"}
-          </button>
-        </div>
-
-        {conversacionesDesplegadas ? (
-          <div
-            className="conversation-list"
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: "auto",
-              paddingRight: "4px",
-            }}
-          >
-            {conversations.map((conversation) => {
-            const isLiveConversation = conversation.id === liveConversationId;
-            const isSelectedConversation = conversation.id === activeConversation?.id;
-
-            return (
-              <div
-                key={conversation.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  marginBottom: "6px",
-                }}
+              <button
+                type="button"
+                className="sidebar-collapse-btn"
+                onClick={() => setSidebarCollapsed(true)}
+                title="Contraer panel"
               >
-                <button
-                  className={
-                    isSelectedConversation ? "history-item active" : "history-item"
-                  }
-                  style={{
-                    flex: 1,
-                    marginBottom: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "8px",
-                  }}
-                  onClick={() => seleccionarConversacion(conversation.id)}
-                  title={conversation.title}
-                >
-                  <span
+                ☰
+              </button>
+            </div>
+
+            <button className="new-chat-btn" onClick={crearNuevaConversacion}>
+              + Nueva conversación
+            </button>
+
+            <div className="history-title">Conversaciones</div>
+
+            <div
+              className="conversation-list"
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+                paddingRight: "4px",
+              }}
+            >
+              {conversations.map((conversation) => {
+                const isLiveConversation = conversation.id === liveConversationId;
+                const isSelectedConversation = conversation.id === activeConversation?.id;
+
+                return (
+                  <div
+                    key={conversation.id}
                     style={{
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      marginBottom: "6px",
                     }}
                   >
-                    {conversation.title}
-                  </span>
-
-                  {isLiveConversation && (
-                    <span
+                    <button
+                      className={
+                        isSelectedConversation ? "history-item active" : "history-item"
+                      }
                       style={{
-                        padding: "2px 6px",
-                        borderRadius: "999px",
-                        background: "#16a34a",
+                        flex: 1,
+                        marginBottom: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "8px",
+                      }}
+                      onClick={() => seleccionarConversacion(conversation.id)}
+                      title={conversation.title}
+                    >
+                      <span
+                        style={{
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {conversation.title}
+                      </span>
+
+                      {isLiveConversation && (
+                        <span
+                          style={{
+                            padding: "2px 6px",
+                            borderRadius: "999px",
+                            background: "#16a34a",
+                            color: "#ffffff",
+                            fontSize: "10px",
+                            fontWeight: 700,
+                            flexShrink: 0,
+                          }}
+                        >
+                          ACTIVA
+                        </span>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      title="Eliminar conversación"
+                      onClick={() => eliminarConversacion(conversation.id)}
+                      style={{
+                        width: "34px",
+                        minWidth: "34px",
+                        height: "34px",
+                        border: "none",
+                        borderRadius: "8px",
+                        background: "#dc2626",
                         color: "#ffffff",
-                        fontSize: "10px",
-                        fontWeight: 700,
+                        cursor: "pointer",
+                        fontWeight: "bold",
                         flexShrink: 0,
                       }}
                     >
-                      ACTIVA
-                    </span>
-                  )}
-                </button>
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
 
-                <button
-                  type="button"
-                  title="Eliminar conversación"
-                  onClick={() => eliminarConversacion(conversation.id)}
-                  style={{
-                    width: "34px",
-                    minWidth: "34px",
-                    height: "34px",
-                    border: "none",
-                    borderRadius: "8px",
-                    background: "#dc2626",
-                    color: "#ffffff",
-                    cursor: "pointer",
-                    fontWeight: "bold",
-                    flexShrink: 0,
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-            );
-            })}
-          </div>
-        ) : (
-          <div className="conversation-list-collapsed">
-            {conversations.length} conversación{conversations.length === 1 ? "" : "es"}
-          </div>
+            <div className="user-info">{usuario}</div>
+          </>
         )}
-
-        <div className="user-info">{usuario}</div>
       </aside>
 
       <main
@@ -1475,9 +1501,10 @@ function Chat() {
 
       {activeConversation?.messages?.length ? (
         <aside
+          className={historyCollapsed ? "history-sidebar history-sidebar-collapsed" : "history-sidebar"}
           style={{
-            width: "280px",
-            minWidth: "280px",
+            width: historyCollapsed ? "64px" : "280px",
+            minWidth: historyCollapsed ? "64px" : "280px",
             height: "100%",
             borderLeft: "1px solid #e5edf5",
             background: "#f8fbff",
@@ -1486,136 +1513,144 @@ function Chat() {
             overflow: "hidden",
           }}
         >
-          <div
-            style={{
-              padding: "12px",
-              borderBottom: "1px solid #e5edf5",
-              background: "#ffffff",
-            }}
-          >
-            <div className="history-panel-header">
-              <span className="history-panel-title">Historial de la conversación</span>
+          {historyCollapsed ? (
+            <div className="history-rail">
               <button
                 type="button"
-                className="panel-corner-toggle"
-                onClick={() => setHistorialDesplegado((visible) => !visible)}
-                aria-expanded={historialDesplegado}
-                title={historialDesplegado ? "Ocultar historial" : "Mostrar historial"}
+                className="sidebar-rail-btn"
+                onClick={() => setHistoryCollapsed(false)}
+                title="Expandir historial"
               >
-                {historialDesplegado ? "−" : "+"}
+                🕘
               </button>
-            </div>
-
-            <div
-              style={{
-                fontSize: "12px",
-                color: "#6b7280",
-                marginBottom: "12px",
-              }}
-            >
-              {activeConversation.title}
-            </div>
-
-            {activeConversation.id === liveConversationId && !modoHistorial ? (
-              <span
-                style={{
-                  display: "inline-block",
-                  padding: "4px 8px",
-                  borderRadius: "999px",
-                  background: "#16a34a",
-                  color: "#ffffff",
-                  fontSize: "11px",
-                  fontWeight: 800,
-                }}
-              >
-                ACTIVA
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() =>
-                  activeConversation && seleccionarConversacion(activeConversation.id)
-                }
-                disabled={
-                  cargando ||
-                  !activeConversation?.copilotConversationId ||
-                  !accessTokenActual ||
-                  !usuarioRef.current
-                }
-                style={{
-                  width: "100%",
-                  border: "none",
-                  borderRadius: "10px",
-                  background:
-                    activeConversation?.copilotConversationId && accessTokenActual && usuarioRef.current
-                      ? "#0d3b66"
-                      : "#9ca3af",
-                  color: "#ffffff",
-                  padding: "10px 12px",
-                  cursor:
-                    activeConversation?.copilotConversationId && accessTokenActual && usuarioRef.current
-                      ? "pointer"
-                      : "not-allowed",
-                  fontWeight: 700,
-                }}
-              >
-                🔄 Continuar conversación
-              </button>
-            )}
-
-            {!activeConversation?.copilotConversationId && (
-              <div
-                style={{
-                  marginTop: "10px",
-                  padding: "9px 10px",
-                  borderRadius: "9px",
-                  background: "#fff7ed",
-                  color: "#9a3412",
-                  fontSize: "12px",
-                  border: "1px solid #fed7aa",
-                }}
-              >
-                Esta conversación fue creada antes de guardar el identificador real
-                de Copilot. Puedes verla como historial, pero no reabrirla con
-                contexto real.
-              </div>
-            )}
-          </div>
-
-          {historialDesplegado ? (
-            <div
-              style={{
-                flex: 1,
-                minHeight: 0,
-                overflowY: "auto",
-                padding: "14px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "10px",
-              }}
-            >
-              {activeConversation.messages.map((message) => (
-              <div
-                key={message.id}
-                className={
-                  message.role === "user"
-                    ? "saved-message saved-message-user"
-                    : "saved-message saved-message-bot"
-                }
-                style={{ maxWidth: "100%" }}
-              >
-                <div className="saved-message-role">
-                  {message.role === "user" ? "Tú" : "Puerto Emplea"}
-                </div>
-
-                <div className="saved-message-text">{message.text}</div>
-              </div>
-              ))}
             </div>
           ) : (
-            <div className="history-panel-collapsed">
-              {activeConversation.messages.length} mensaje{activeConversation.messages.length === 1 ? "" : "s"} guardado{activeConversation.messages.length === 1 ? "" : "s"}
-            </div>
+            <>
+              <div
+                style={{
+                  padding: "12px",
+                  borderBottom: "1px solid #e5edf5",
+                  background: "#ffffff",
+                }}
+              >
+                <div className="history-panel-header">
+                  <span className="history-panel-title">Historial de la conversación</span>
+                  <button
+                    type="button"
+                    className="sidebar-collapse-btn"
+                    onClick={() => setHistoryCollapsed(true)}
+                    title="Contraer historial"
+                  >
+                    ☰
+                  </button>
+                </div>
+
+                <div
+                  style={{
+                    fontSize: "12px",
+                    color: "#6b7280",
+                    marginBottom: "12px",
+                  }}
+                >
+                  {activeConversation.title}
+                </div>
+
+                {activeConversation.id === liveConversationId && !modoHistorial ? (
+                  <span
+                    style={{
+                      display: "inline-block",
+                      padding: "4px 8px",
+                      borderRadius: "999px",
+                      background: "#16a34a",
+                      color: "#ffffff",
+                      fontSize: "11px",
+                      fontWeight: 800,
+                    }}
+                  >
+                    ACTIVA
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      activeConversation && seleccionarConversacion(activeConversation.id)
+                    }
+                    disabled={
+                      cargando ||
+                      !activeConversation?.copilotConversationId ||
+                      !accessTokenActual ||
+                      !usuarioRef.current
+                    }
+                    style={{
+                      width: "100%",
+                      border: "none",
+                      borderRadius: "10px",
+                      background:
+                        activeConversation?.copilotConversationId && accessTokenActual && usuarioRef.current
+                          ? "#0d3b66"
+                          : "#9ca3af",
+                      color: "#ffffff",
+                      padding: "10px 12px",
+                      cursor:
+                        activeConversation?.copilotConversationId && accessTokenActual && usuarioRef.current
+                          ? "pointer"
+                          : "not-allowed",
+                      fontWeight: 700,
+                    }}
+                  >
+                    🔄 Continuar conversación
+                  </button>
+                )}
+
+                {!activeConversation?.copilotConversationId && (
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      padding: "9px 10px",
+                      borderRadius: "9px",
+                      background: "#fff7ed",
+                      color: "#9a3412",
+                      fontSize: "12px",
+                      border: "1px solid #fed7aa",
+                    }}
+                  >
+                    Esta conversación fue creada antes de guardar el identificador real
+                    de Copilot. Puedes verla como historial, pero no reabrirla con
+                    contexto real.
+                  </div>
+                )}
+              </div>
+
+              <div
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: "auto",
+                  padding: "14px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                {activeConversation.messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={
+                      message.role === "user"
+                        ? "saved-message saved-message-user"
+                        : "saved-message saved-message-bot"
+                    }
+                    style={{ maxWidth: "100%" }}
+                  >
+                    <div className="saved-message-role">
+                      {message.role === "user" ? "Tú" : "Puerto Emplea"}
+                    </div>
+
+                    <div className="saved-message-text">{message.text}</div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </aside>
       ) : null}
