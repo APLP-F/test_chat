@@ -230,3 +230,136 @@ body {
   padding: 24px;
   text-align: center;
 }
+/* =========================================================
+   Puerto Emplea - Paneles laterales y suggested actions
+   - Mantiene el ancho de los paneles.
+   - Los controles de desplegar quedan en sus esquinas.
+   - Los botones del agente conservan su ubicacion original.
+   ========================================================= */
+.sidebar-section-header,
+.history-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sidebar-section-header {
+  margin-top: 24px;
+  margin-bottom: 10px;
+}
+
+.sidebar-section-title {
+  font-size: 12px;
+  color: #888888;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
+.history-panel-header {
+  margin-bottom: 6px;
+}
+
+.history-panel-title {
+  font-size: 13px;
+  color: #0d3b66;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.panel-corner-toggle {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  border: 1px solid #c7d7e8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0d3b66;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.panel-corner-toggle:hover {
+  background: #f3f8ff;
+  border-color: #0d3b66;
+}
+
+.conversation-list-collapsed,
+.history-panel-collapsed {
+  border: 1px dashed #c7d7e8;
+  background: #f8fbff;
+  color: #58708a;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.history-panel-collapsed {
+  margin: 14px;
+  text-align: center;
+}
+
+/* Mantener el layout estable: los paneles conservan ancho y el chat central ocupa el resto */
+.chat-area {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-wrapper {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Botones sugeridos generados por el agente.
+   Solo cambia su apariencia: no cambia ubicacion ni funcionamiento. */
+.chat-wrapper [class*="suggested"] button,
+.chat-wrapper [class*="suggested"] [role="button"],
+.webchat__suggested-action,
+.webchat__suggested-action button,
+.webchat__suggested-action__button,
+.webchat__suggested-actions button,
+.webchat__suggested-actions [role="button"] {
+  min-height: 0 !important;
+  padding: 5px 11px !important;
+  border-radius: 12px !important;
+  border: 1px solid #cddbec !important;
+  background: #ffffff !important;
+  color: #0d3b66 !important;
+  font-size: 12px !important;
+  line-height: 1.25 !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+.chat-wrapper [class*="suggested"] button:hover,
+.chat-wrapper [class*="suggested"] [role="button"]:hover,
+.webchat__suggested-action:hover,
+.webchat__suggested-action button:hover,
+.webchat__suggested-action__button:hover,
+.webchat__suggested-actions button:hover,
+.webchat__suggested-actions [role="button"]:hover {
+  border-color: #0d3b66 !important;
+  background: #f3f8ff !important;
+  color: #0d3b66 !important;
+}
+
+.webchat__suggested-actions,
+.webchat__suggested-actions__stack,
+.webchat__suggested-actions__carousel {
+  padding-top: 6px !important;
+  padding-bottom: 4px !important;
+}
+
+/* Flechas del carrusel de suggested actions, cuando aparecen */
+.chat-wrapper [class*="suggested"] button[aria-label],
+.webchat__suggested-actions button[aria-label] {
+  border-radius: 999px !important;
+}

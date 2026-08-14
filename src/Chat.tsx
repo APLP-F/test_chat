@@ -1309,17 +1309,18 @@ function Chat() {
           + Nueva conversación
         </button>
 
-        <button
-          type="button"
-          className="section-toggle"
-          onClick={() => setConversacionesDesplegadas((visible) => !visible)}
-          aria-expanded={conversacionesDesplegadas}
-        >
-          <span>Conversaciones</span>
-          <span className="section-toggle-icon">
+        <div className="sidebar-section-header">
+          <span className="sidebar-section-title">Conversaciones</span>
+          <button
+            type="button"
+            className="panel-corner-toggle"
+            onClick={() => setConversacionesDesplegadas((visible) => !visible)}
+            aria-expanded={conversacionesDesplegadas}
+            title={conversacionesDesplegadas ? "Ocultar conversaciones" : "Mostrar conversaciones"}
+          >
             {conversacionesDesplegadas ? "−" : "+"}
-          </span>
-        </button>
+          </button>
+        </div>
 
         {conversacionesDesplegadas ? (
           <div
@@ -1492,17 +1493,18 @@ function Chat() {
               background: "#ffffff",
             }}
           >
-            <button
-              type="button"
-              className="history-panel-toggle"
-              onClick={() => setHistorialDesplegado((visible) => !visible)}
-              aria-expanded={historialDesplegado}
-            >
-              <span>Historial de la conversación</span>
-              <span className="section-toggle-icon">
+            <div className="history-panel-header">
+              <span className="history-panel-title">Historial de la conversación</span>
+              <button
+                type="button"
+                className="panel-corner-toggle"
+                onClick={() => setHistorialDesplegado((visible) => !visible)}
+                aria-expanded={historialDesplegado}
+                title={historialDesplegado ? "Ocultar historial" : "Mostrar historial"}
+              >
                 {historialDesplegado ? "−" : "+"}
-              </span>
-            </button>
+              </button>
+            </div>
 
             <div
               style={{
