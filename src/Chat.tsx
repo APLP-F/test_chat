@@ -348,6 +348,8 @@ function Chat() {
 
   const [webChatKey, setWebChatKey] = useState(createId());
   const [modoHistorial, setModoHistorial] = useState(false);
+  const [conversacionesDesplegadas, setConversacionesDesplegadas] = useState(true);
+  const [historialDesplegado, setHistorialDesplegado] = useState(true);
   const [, setResumedConversationId] = useState<string | null>(null);
 
   const estaEnIframe = window.self !== window.top;
@@ -1307,18 +1309,29 @@ function Chat() {
           + Nueva conversación
         </button>
 
-        <div className="history-title">Conversaciones</div>
-
-        <div
-          className="conversation-list"
-          style={{
-            flex: 1,
-            minHeight: 0,
-            overflowY: "auto",
-            paddingRight: "4px",
-          }}
+        <button
+          type="button"
+          className="section-toggle"
+          onClick={() => setConversacionesDesplegadas((visible) => !visible)}
+          aria-expanded={conversacionesDesplegadas}
         >
-          {conversations.map((conversation) => {
+          <span>Conversaciones</span>
+          <span className="section-toggle-icon">
+            {conversacionesDesplegadas ? "−" : "+"}
+          </span>
+        </button>
+
+        {conversacionesDesplegadas ? (
+          <div
+            className="conversation-list"
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: "auto",
+              paddingRight: "4px",
+            }}
+          >
+            {conversations.map((conversation) => {
             const isLiveConversation = conversation.id === liveConversationId;
             const isSelectedConversation = conversation.id === activeConversation?.id;
 
@@ -1395,8 +1408,13 @@ function Chat() {
                 </button>
               </div>
             );
-          })}
-        </div>
+            })}
+          </div>
+        ) : (
+          <div className="conversation-list-collapsed">
+            {conversations.length} conversación{conversations.length === 1 ? "" : "es"}
+          </div>
+        )}
 
         <div className="user-info">{usuario}</div>
       </aside>
@@ -1474,15 +1492,17 @@ function Chat() {
               background: "#ffffff",
             }}
           >
-            <div
-              style={{
-                fontWeight: 800,
-                color: "#0d3b66",
-                marginBottom: "4px",
-              }}
+            <button
+              type="button"
+              className="history-panel-toggle"
+              onClick={() => setHistorialDesplegado((visible) => !visible)}
+              aria-expanded={historialDesplegado}
             >
-              Historial de la conversación
-            </div>
+              <span>Historial de la conversación</span>
+              <span className="section-toggle-icon">
+                {historialDesplegado ? "−" : "+"}
+              </span>
+            </button>
 
             <div
               style={{
@@ -1560,18 +1580,19 @@ function Chat() {
             )}
           </div>
 
-          <div
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: "auto",
-              padding: "14px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "10px",
-            }}
-          >
-            {activeConversation.messages.map((message) => (
+          {historialDesplegado ? (
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+                padding: "14px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+              }}
+            >
+              {activeConversation.messages.map((message) => (
               <div
                 key={message.id}
                 className={
@@ -1587,8 +1608,13 @@ function Chat() {
 
                 <div className="saved-message-text">{message.text}</div>
               </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="history-panel-collapsed">
+              {activeConversation.messages.length} mensaje{activeConversation.messages.length === 1 ? "" : "s"} guardado{activeConversation.messages.length === 1 ? "" : "s"}
+            </div>
+          )}
         </aside>
       ) : null}
     </div>
