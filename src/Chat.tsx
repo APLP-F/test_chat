@@ -348,8 +348,8 @@ function Chat() {
 
   const [webChatKey, setWebChatKey] = useState(createId());
   const [modoHistorial, setModoHistorial] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [historyCollapsed, setHistoryCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [historyCollapsed, setHistoryCollapsed] = useState(true);
   const [, setResumedConversationId] = useState<string | null>(null);
 
   const estaEnIframe = window.self !== window.top;
@@ -1290,9 +1290,9 @@ function Chat() {
       <aside
         className={sidebarCollapsed ? "sidebar sidebar-collapsed" : "sidebar"}
         style={{
-          width: sidebarCollapsed ? "64px" : "220px",
-          minWidth: sidebarCollapsed ? "64px" : "220px",
-          maxWidth: sidebarCollapsed ? "64px" : "220px",
+          width: sidebarCollapsed ? "56px" : "220px",
+          minWidth: sidebarCollapsed ? "56px" : "220px",
+          maxWidth: sidebarCollapsed ? "56px" : "220px",
         }}
       >
         {sidebarCollapsed ? (
@@ -1503,8 +1503,8 @@ function Chat() {
         <aside
           className={historyCollapsed ? "history-sidebar history-sidebar-collapsed" : "history-sidebar"}
           style={{
-            width: historyCollapsed ? "64px" : "280px",
-            minWidth: historyCollapsed ? "64px" : "280px",
+            width: historyCollapsed ? "56px" : "280px",
+            minWidth: historyCollapsed ? "56px" : "280px",
             height: "100%",
             borderLeft: "1px solid #e5edf5",
             background: "#f8fbff",
