@@ -204,6 +204,27 @@ function mapDataverseMessageToSavedMessage(message: DataverseMessage): SavedMess
   };
 }
 
+function stripCitations(text: string): string {
+  if (!text) {
+    return text;
+  }
+
+  return text
+    // Elimina marcadores de cita con UUID (p. ej. las citas que añade Copilot Studio,
+    // del tipo "【cite】e76b79af-2db7-f111-aaab-7ced8d2d2305【】").
+    .replace(
+      /[^\w\s]{0,4}cite[^\w\s]{0,4}[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}[^\w\s]{0,4}/gi,
+      ""
+    )
+    // Elimina posibles marcadores de cita sueltos que puedan quedar sin UUID.
+    .replace(/[^\w\s]{1,4}cite[^\w\s]{1,4}/gi, "")
+    // Limpia los espacios y saltos de línea que puedan quedar duplicados tras el borrado.
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ +\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function isPuertoEmpleaGreeting(text: string): boolean {
   const normalizedText = text
     .trim()
@@ -674,6 +695,14 @@ function Chat() {
       if (action.type === "DIRECT_LINE/INCOMING_ACTIVITY") {
         const activity = action.payload?.activity;
         const realCopilotConversationId = activity?.conversation?.id;
+
+        if (
+          activity?.from?.role === "bot" &&
+          activity?.type === "message" &&
+          typeof activity.text === "string"
+        ) {
+          activity.text = stripCitations(activity.text);
+        }
 
         if (currentLiveConversationId && realCopilotConversationId) {
           updateCopilotConversationId(
