@@ -381,3 +381,23 @@ body {
 .webchat__suggested-actions button[aria-label] {
   border-radius: 999px !important;
 }
+
+/* Barra de "Escriba su mensaje": aumenta la altura vertical */
+.webchat__send-box,
+.webchat__send-box-text-box {
+  min-height: 64px !important;
+}
+
+.webchat__send-box-text-box__input {
+  min-height: 64px !important;
+  max-height: 160px !important;
+  padding-top: 18px !important;
+  padding-bottom: 18px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.webchat__send-box__main,
+.webchat__icon-button.webchat__send-icon-button {
+  min-height: 64px !important;
+}
