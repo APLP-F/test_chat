@@ -27,6 +27,84 @@ let activeStorageKey = DEFAULT_STORAGE_KEY;
 const DATAVERSE_FLOW_URL = "https://6b8fc4584a99e825afb8ecbd16a97c.53.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/18/workflows/78ff7b170f4d4d3dbe0c175ba4a5568e/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=66ilhkEvJXjx1ZeSaBfNCgmGZDvmVqsFr_jK8Nh1hME";
 const DEFAULT_CONVERSATION_TITLE = "Conversación actual";
 
+// ---------------------------------------------------------------------------
+// Sesión de autenticación persistente.
+// Power Apps destruye y recrea el control al cambiar de pantalla, y con él se
+// perdía el token (que solo vivía en el estado de React). Se guarda en
+// sessionStorage para reutilizarlo mientras siga vigente.
+// ---------------------------------------------------------------------------
+const AUTH_SESSION_KEY = "puerto_emplea_auth_session_v1";
+
+interface AuthSession {
+  username: string;
+  accessToken: string;
+  expiresAt: number;
+}
+
+function getTokenExpiration(token: string): number {
+  try {
+    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    const payload = JSON.parse(atob(padded));
+
+    if (typeof payload.exp === "number") {
+      return payload.exp * 1000;
+    }
+  } catch {
+    // Si no se puede leer el token, se usa una caducidad conservadora.
+  }
+
+  return Date.now() + 50 * 60 * 1000;
+}
+
+function saveAuthSession(username: string, accessToken: string): void {
+  try {
+    const session: AuthSession = {
+      username,
+      accessToken,
+      expiresAt: getTokenExpiration(accessToken),
+    };
+
+    window.sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
+  } catch {
+    // Almacenamiento no disponible: se pedirá inicio de sesión como antes.
+  }
+}
+
+function clearAuthSession(): void {
+  try {
+    window.sessionStorage.removeItem(AUTH_SESSION_KEY);
+  } catch {
+    // Nada que hacer.
+  }
+}
+
+function loadAuthSession(): AuthSession | null {
+  try {
+    const raw = window.sessionStorage.getItem(AUTH_SESSION_KEY);
+
+    if (!raw) {
+      return null;
+    }
+
+    const session = JSON.parse(raw) as AuthSession;
+
+    // Se descarta si falta menos de 2 minutos para que caduque.
+    if (
+      !session.accessToken ||
+      !session.username ||
+      session.expiresAt - Date.now() < 2 * 60 * 1000
+    ) {
+      clearAuthSession();
+      return null;
+    }
+
+    return session;
+  } catch {
+    return null;
+  }
+}
+
 function createUserStorageKey(username: string): string {
   const safeUsername = username
     .trim()
@@ -851,6 +929,7 @@ function Chat() {
       setUsuario(username);
       usuarioRef.current = username;
       setAccessTokenActual(accessToken);
+      saveAuthSession(username, accessToken);
       setMensaje("Conectando con Puerto Emplea...");
 
       const localUserConversations = activateStorageForUser(username);
@@ -885,6 +964,7 @@ function Chat() {
 
       setResumedConversationId(null);
     } catch (error) {
+      clearAuthSession();
       console.error("Error conectando con Copilot Studio:", error);
       setMensaje("No se pudo conectar con Puerto Emplea.");
       setNecesitaLogin(true);
@@ -1240,6 +1320,19 @@ function Chat() {
           }
         }
 
+        // Reutiliza la sesión guardada si el token sigue vigente
+        const sesionGuardada = loadAuthSession();
+
+        if (sesionGuardada) {
+          usuarioRef.current = sesionGuardada.username;
+          setMsalListo(true);
+          await conectarConToken(
+            sesionGuardada.username,
+            sesionGuardada.accessToken
+          );
+          return;
+        }
+
         setMsalListo(true);
 
         const cuentas = msalInstance.getAllAccounts();
@@ -1275,6 +1368,10 @@ function Chat() {
     rootWidth: "100%",
     primaryFont: "Inter, Segoe UI, sans-serif",
     hideUploadButton: false,
+    // Evita que la pantalla se desplace sola mientras llega la respuesta:
+    // se fija el inicio del mensaje del agente.
+    autoScrollSnapOnPage: true,
+    autoScrollSnapOnPageOffset: 0,
   };
 
   if (!connection && !modoHistorial) {

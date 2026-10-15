@@ -18,11 +18,19 @@
 
       const redirectUri = "https://aplp-f.github.io/test_chat/auth.html";
 
+      // Mismo scope que usa el chat (authConfig.ts), para que la caché de MSAL
+      // sea compartida y el chat pueda renovar el token sin pedir login.
       const loginRequest = {
-        scopes: ["https://api.powerplatform.com/.default"],
+        scopes: ["https://api.powerplatform.com/CopilotStudio.Copilots.Invoke"],
         redirectUri
       };
 
+      const params = new URLSearchParams(window.location.search);
+      const loginHint = params.get("hint") || undefined;
+
+      // localStorage (antes sessionStorage): la cuenta queda guardada en este origen
+      // y se comparte con el chat (mismo dominio), de modo que no hay que volver
+      // a elegir cuenta ni a iniciar sesión.
       const msalInstance = new PublicClientApplication({
         auth: {
           clientId,
@@ -30,7 +38,7 @@
           redirectUri
         },
         cache: {
-          cacheLocation: "sessionStorage",
+          cacheLocation: "localStorage",
           storeAuthStateInCookie: true
         }
       });
@@ -39,6 +47,16 @@
         if (window.opener && !window.opener.closed) {
           window.opener.postMessage(data, window.location.origin);
         }
+      }
+
+      async function enviarExito(account, accessToken) {
+        enviarResultado({
+          type: "PUERTO_EMPLEA_AUTH_SUCCESS",
+          username: account.username,
+          accessToken
+        });
+
+        window.close();
       }
 
       try {
@@ -58,18 +76,39 @@
             accessToken = silentResult.accessToken;
           }
 
-          enviarResultado({
-            type: "PUERTO_EMPLEA_AUTH_SUCCESS",
-            username: result.account.username,
-            accessToken
-          });
-
-          window.close();
+          await enviarExito(result.account, accessToken);
         } else {
-          await msalInstance.loginRedirect({
-            ...loginRequest,
-            prompt: "select_account"
-          });
+          // Si ya hay una cuenta guardada, intenta obtener el token sin mostrar nada.
+          const cuentas = msalInstance.getAllAccounts();
+          const cuenta =
+            cuentas.find(
+              (c) => loginHint && c.username.toLowerCase() === loginHint.toLowerCase()
+            ) || cuentas[0];
+
+          let resuelto = false;
+
+          if (cuenta) {
+            try {
+              const silentResult = await msalInstance.acquireTokenSilent({
+                ...loginRequest,
+                account: cuenta
+              });
+
+              await enviarExito(cuenta, silentResult.accessToken);
+              resuelto = true;
+            } catch (silentError) {
+              console.warn("Token silencioso no disponible, se pedirá login:", silentError);
+            }
+          }
+
+          if (!resuelto) {
+            // Sin "prompt: select_account": si hay una sola sesión de Microsoft
+            // activa, entra directamente sin pedir elegir cuenta.
+            await msalInstance.loginRedirect({
+              ...loginRequest,
+              ...(loginHint ? { loginHint } : {})
+            });
+          }
         }
       } catch (error) {
         enviarResultado({
