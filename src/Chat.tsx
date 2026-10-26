@@ -277,7 +277,7 @@ function mapDataverseMessageToSavedMessage(message: DataverseMessage): SavedMess
   return {
     id: createId(),
     role: normalizeRoleFromDataverse(message.rol),
-    text: message.mensaje || "",
+    text: stripCitations(message.mensaje || ""),
     createdAt: message.fecha || new Date().toISOString(),
   };
 }
@@ -288,15 +288,24 @@ function stripCitations(text: string): string {
   }
 
   return text
-    // Elimina marcadores de cita con UUID (p. ej. las citas que añade Copilot Studio,
-    // del tipo "【cite】e76b79af-2db7-f111-aaab-7ced8d2d2305【】").
+    // 1) Copilot Studio envuelve las citas / llamadas a herramientas entre
+    //    caracteres Unicode de uso privado (\uE200 ... \uE201, con \uE202 como
+    //    separador). Se elimina el bloque completo, incluido el texto interior
+    //    (p. ej. "cite" + "Servidor-MCP-de-Microsoft-Dataverse-read_query").
+    .replace(/\uE200[^\uE201]*\uE201/g, "")
+    // 2) Marcadores de cita con UUID (p. ej. "【cite】e76b79af-2db7-...【】").
     .replace(
       /[^\w\s]{0,4}cite[^\w\s]{0,4}[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}[^\w\s]{0,4}/gi,
       ""
     )
-    // Elimina posibles marcadores de cita sueltos que puedan quedar sin UUID.
+    // 3) Nombres de herramientas MCP que se cuelan en el texto
+    //    (p. ej. "Servidor-MCP-de-Microsoft-Dataverse-read_query").
+    .replace(/(?:Servidor|Server)-MCP-[\w.\-]*/gi, "")
+    // 4) Marcadores de cita sueltos que puedan quedar.
     .replace(/[^\w\s]{1,4}cite[^\w\s]{1,4}/gi, "")
-    // Limpia los espacios y saltos de línea que puedan quedar duplicados tras el borrado.
+    // 5) Caracteres de uso privado o de reemplazo huérfanos (el cuadrado "□").
+    .replace(/[\uE000-\uF8FF\uFFFD]/g, "")
+    // 6) Limpia espacios y saltos de línea duplicados tras el borrado.
     .replace(/[ \t]{2,}/g, " ")
     .replace(/ +\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
@@ -776,7 +785,7 @@ function Chat() {
 
         if (
           activity?.from?.role === "bot" &&
-          activity?.type === "message" &&
+          (activity?.type === "message" || activity?.type === "typing") &&
           typeof activity.text === "string"
         ) {
           activity.text = stripCitations(activity.text);
@@ -1772,7 +1781,7 @@ function Chat() {
                       {message.role === "user" ? "Tú" : "Puerto Emplea"}
                     </div>
 
-                    <div className="saved-message-text">{message.text}</div>
+                    <div className="saved-message-text">{stripCitations(message.text)}</div>
                   </div>
                 ))}
               </div>
