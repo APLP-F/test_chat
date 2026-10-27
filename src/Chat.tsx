@@ -303,6 +303,10 @@ function stripCitations(text: string): string {
     .replace(/(?:Servidor|Server)-MCP-[\w.\-]*/gi, "")
     // 4) Marcadores de cita sueltos que puedan quedar.
     .replace(/[^\w\s]{1,4}cite[^\w\s]{1,4}/gi, "")
+    // 4b) Referencias de conocimiento: definiciones "[1]: cite:1 "Título"" y
+    //     marcadores "[1]" dentro del texto (no toca enlaces markdown "[1](url)").
+    .replace(/^[ \t]*\[\d+\]:[ \t]*cite:.*$/gim, "")
+    .replace(/[ \t]?\[\d+\](?!\(|:)/g, "")
     // 5) Caracteres de uso privado o de reemplazo huérfanos (el cuadrado "□").
     .replace(/[\uE000-\uF8FF\uFFFD]/g, "")
     // 6) Limpia espacios y saltos de línea duplicados tras el borrado.
@@ -310,6 +314,22 @@ function stripCitations(text: string): string {
     .replace(/ +\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function isCitationEntity(entity: any): boolean {
+  if (!entity || typeof entity !== "object") {
+    return false;
+  }
+
+  const type = String(entity.type || "");
+
+  return (
+    type === "Message" ||
+    type === "Claim" ||
+    /schema\.org\/(Message|Claim)/i.test(type) ||
+    "citation" in entity ||
+    "appearance" in entity
+  );
 }
 
 function isPuertoEmpleaGreeting(text: string): boolean {
@@ -789,6 +809,16 @@ function Chat() {
           typeof activity.text === "string"
         ) {
           activity.text = stripCitations(activity.text);
+        }
+
+        // Oculta el desplegable "N referencia(s)" quitando las entidades de cita.
+        if (
+          activity?.from?.role === "bot" &&
+          Array.isArray(activity.entities)
+        ) {
+          activity.entities = activity.entities.filter(
+            (entity: any) => !isCitationEntity(entity)
+          );
         }
 
         if (currentLiveConversationId && realCopilotConversationId) {
@@ -1781,7 +1811,7 @@ function Chat() {
                       {message.role === "user" ? "Tú" : "Puerto Emplea"}
                     </div>
 
-                    <div className="saved-message-text">{stripCitations(message.text)}</div>
+                    <div className="saved-message-text">{message.role === "bot" ? stripCitations(message.text) : message.text}</div>
                   </div>
                 ))}
               </div>
